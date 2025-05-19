@@ -1,0 +1,206 @@
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+export default function NotificationsScreen({ navigation }) {
+  const [notifications, setNotifications] = useState([]);
+
+  // Função para marcar notificação como lida
+  const handleNotificationPress = (id) => {
+    setNotifications(
+      notifications.map(notification => 
+        notification.id === id 
+          ? { ...notification, isRead: true } 
+          : notification
+      )
+    );
+  };
+
+  // Função para limpar todas as notificações
+  const clearAllNotifications = () => {
+    setNotifications([]);
+  };
+
+  // Renderiza um item da lista de notificações
+  const renderItem = ({ item }) => (
+    <TouchableOpacity 
+      style={[
+        styles.notificationItem, 
+        !item.isRead && styles.unreadNotification
+      ]}
+      onPress={() => handleNotificationPress(item.id)}
+    >
+      <View style={[
+        styles.iconContainer, 
+        { backgroundColor: item.isEmergency ? '#FFE8EC' : '#E6F7EF' }
+      ]}>
+        {item.isEmergency ? (
+          <Ionicons name="alert-triangle" size={20} color="#FF6B6B" />
+        ) : (
+          <Ionicons name="notifications" size={20} color="#50C878" />
+        )}
+      </View>
+      
+      <View style={styles.notificationContent}>
+        <Text style={styles.notificationTitle}>{item.title}</Text>
+        <Text style={styles.notificationBody}>{item.body}</Text>
+        <Text style={styles.notificationTime}>
+          {item.time} • {item.date}
+        </Text>
+      </View>
+      
+      {!item.isRead && (
+        <View style={styles.unreadIndicator} />
+      )}
+    </TouchableOpacity>
+  );
+
+  // Componente para quando a lista está vazia
+  const ListEmptyComponent = () => (
+    <View style={styles.emptyContainer}>
+      <Ionicons name="notifications" size={60} color="#A0AEC0" />
+      <Text style={styles.emptyTitle}>Sem Notificações</Text>
+      <Text style={styles.emptyDescription}>
+        Você está em dia! Notificações sobre seus medicamentos aparecerão aqui.
+      </Text>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Notificações</Text>
+        {notifications.length > 0 && (
+          <TouchableOpacity 
+            style={styles.clearButton}
+            onPress={clearAllNotifications}
+          >
+            <Ionicons name="trash-outline" size={16} color="#718096" />
+            <Text style={styles.clearButtonText}>Limpar Tudo</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      
+      <FlatList
+        data={notifications}
+        renderItem={renderItem}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={ListEmptyComponent}
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F7FAFC',
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 20,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2D3748',
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF2F7',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  clearButtonText: {
+    marginLeft: 4,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#718096',
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 24,
+    flexGrow: 1,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 1,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  unreadNotification: {
+    backgroundColor: '#F8FAFC',
+    borderLeftWidth: 3,
+    borderLeftColor: '#4A90E2',
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  notificationContent: {
+    flex: 1,
+  },
+  notificationTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 4,
+  },
+  notificationBody: {
+    fontSize: 14,
+    color: '#4A5568',
+    marginBottom: 8,
+  },
+  notificationTime: {
+    fontSize: 12,
+    color: '#A0AEC0',
+  },
+  unreadIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#4A90E2',
+    marginLeft: 8,
+    alignSelf: 'center',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 20,
+    flex: 1,
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyDescription: {
+    fontSize: 16,
+    color: '#718096',
+    textAlign: 'center',
+    maxWidth: 300,
+  },
+});
