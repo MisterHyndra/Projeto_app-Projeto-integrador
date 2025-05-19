@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
-import { Bell, Clock } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Bell, Clock } from 'lucide-react-native';
+import React from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function WelcomeScreen({ navigation }) {
   const { isAuthenticated } = useAuth();
@@ -25,7 +25,7 @@ export default function WelcomeScreen({ navigation }) {
 
       <View style={styles.header}>
         <Bell size={64} color="#fff" />
-        <Text style={styles.title}>MedAlerta</Text>
+        <Text style={styles.title}>Med Alerta</Text>
         <Text style={styles.subtitle}>Nunca mais esqueça seus medicamentos</Text>
       </View>
 

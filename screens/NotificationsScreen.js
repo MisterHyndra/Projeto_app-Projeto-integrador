@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useMedication } from '../contexts/MedicationContext';
 
 export default function NotificationsScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
+  const { notificationSettings } = useMedication();
 
   // Função para marcar notificação como lida
   const handleNotificationPress = (id) => {
@@ -81,6 +83,49 @@ export default function NotificationsScreen({ navigation }) {
         )}
       </View>
       
+      <ScrollView style={styles.settingsContainer}>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Configurações de Notificação</Text>
+          <View style={styles.divider} />
+          
+          <View style={styles.settingRow}>
+            <Text style={styles.label}>Som:</Text>
+            <Text style={styles.value}>
+              {notificationSettings?.soundEnabled ? 'Ativado' : 'Desativado'}
+            </Text>
+          </View>
+
+          <View style={styles.settingRow}>
+            <Text style={styles.label}>Vibração:</Text>
+            <Text style={styles.value}>
+              {notificationSettings?.vibrationEnabled ? 'Ativada' : 'Desativada'}
+            </Text>
+          </View>
+
+          <View style={styles.settingRow}>
+            <Text style={styles.label}>Intervalo entre lembretes:</Text>
+            <Text style={styles.value}>
+              {notificationSettings?.reminderInterval} minutos
+            </Text>
+          </View>
+
+          <View style={styles.settingRow}>
+            <Text style={styles.label}>Máximo de lembretes:</Text>
+            <Text style={styles.value}>
+              {notificationSettings?.maxReminders}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Próximas Notificações</Text>
+          <View style={styles.divider} />
+          <Text style={styles.infoText}>
+            As notificações serão exibidas aqui quando houver medicamentos agendados.
+          </Text>
+        </View>
+      </ScrollView>
+
       <FlatList
         data={notifications}
         renderItem={renderItem}
@@ -123,6 +168,51 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: '#718096',
+  },
+  settingsContainer: {
+    padding: 16,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#2D3748',
+    marginBottom: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 12,
+  },
+  label: {
+    fontSize: 16,
+    color: '#4A5568',
+  },
+  value: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#2D3748',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#718096',
+    fontStyle: 'italic',
   },
   listContent: {
     paddingHorizontal: 16,

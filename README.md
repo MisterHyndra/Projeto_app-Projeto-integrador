@@ -48,3 +48,6 @@ Join our community of developers creating universal apps.
 
 - [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
 - [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- [cd c:\Users\pvpne\OneDrive\Desktop\novo-app-project && npx expo start] // para executar o app
+- [cd c:\Users\pvpne\OneDrive\Desktop\novo-app-project\backend && npm start] // para executar o backend
+- [cd c:\Users\pvpne\OneDrive\Desktop\novo-app-project\backend && npm install && npm start] // para instalar as dependências do backend

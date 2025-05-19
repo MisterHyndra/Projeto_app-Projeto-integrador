@@ -1,15 +1,16 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, ActivityIndicator, Modal, TextInput, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useMedication } from '../contexts/MedicationContext';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
+import React, { useState } from 'react';
+import { ActivityIndicator, Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useMedication } from '../contexts/MedicationContext';
 
 export default function MedicationsScreen() {
   const { medications, loading, addMedication, updateMedication, deleteMedication } = useMedication();
   const [modalVisible, setModalVisible] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [currentMedication, setCurrentMedication] = useState(null);
-  
+
   // Estados para o formulário
   const [name, setName] = useState('');
   const [dosage, setDosage] = useState('');
@@ -20,6 +21,63 @@ export default function MedicationsScreen() {
   const [endDate, setEndDate] = useState(null);
   const [instructions, setInstructions] = useState('');
   const [color, setColor] = useState('#4A90E2');
+  const [status, setStatus] = useState('scheduled');
+
+  // Estados para o DateTimePicker
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [datePickerMode, setDatePickerMode] = useState('date');
+  const [tempDate, setTempDate] = useState(new Date());
+
+  // Funções do DateTimePicker
+  const showPicker = (mode) => {
+    setDatePickerMode(mode);
+    setShowDatePicker(true);
+    
+    // Para dispositivos Android, o DateTimePicker é exibido como um modal
+    // Para iOS, ele é exibido inline
+    if (Platform.OS === 'android') {
+      // No Android, o DateTimePicker é exibido automaticamente
+      console.log(`Abrindo DateTimePicker no modo: ${mode}`);
+    }
+  };
+
+  const onDateTimeChange = (event, selectedDate) => {
+    // No Android, o DateTimePicker é fechado automaticamente após a seleção
+    // No iOS, precisamos fechá-lo manualmente
+    setShowDatePicker(Platform.OS === 'ios');
+    
+    // Se o usuário cancelou a seleção, não fazemos nada
+    if (event.type === 'dismissed') {
+      return;
+    }
+    
+    // Se o usuário selecionou uma data/hora
+    if (selectedDate) {
+      const currentDate = selectedDate;
+      setTempDate(currentDate);
+      
+      if (datePickerMode === 'date') {
+        // Atualiza a data de início
+        setStartDate(currentDate);
+        console.log(`Data selecionada: ${format(currentDate, 'dd/MM/yyyy')}`);
+      } else {
+        // Adiciona o horário selecionado à lista
+        const timeString = format(currentDate, 'HH:mm');
+        if (!selectedTimes.includes(timeString)) {
+          setSelectedTimes([...selectedTimes, timeString].sort());
+          console.log(`Horário adicionado: ${timeString}`);
+        }
+      }
+    }
+  };
+
+  // Adicionar um horário específico
+  const addTime = (hour, minute) => {
+    const timeString = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+    if (!selectedTimes.includes(timeString)) {
+      setSelectedTimes([...selectedTimes, timeString].sort());
+    }
+  };
 
   // Abrir modal para adicionar medicamento
   const handleAddMedication = () => {
@@ -33,7 +91,6 @@ export default function MedicationsScreen() {
   const handleEditMedication = (medication) => {
     setEditMode(true);
     setCurrentMedication(medication);
-    // Preencher o formulário com os dados do medicamento
     setName(medication.name);
     setDosage(medication.dosage);
     setFrequency(medication.frequency || 'daily');
@@ -43,12 +100,18 @@ export default function MedicationsScreen() {
     setEndDate(medication.endDate ? new Date(medication.endDate) : null);
     setInstructions(medication.instructions || '');
     setColor(medication.color || '#4A90E2');
+    setStatus(medication.status || 'scheduled');
     setModalVisible(true);
   };
 
-  // Salvar medicamento (adicionar ou atualizar)
+  // Salvar medicamento
   const handleSaveMedication = async () => {
     try {
+      if (!name || !dosage || selectedTimes.length === 0) {
+        Alert.alert('Erro', 'Por favor, preencha todos os campos obrigatórios');
+        return;
+      }
+
       const medicationData = {
         name,
         dosage,
@@ -59,6 +122,7 @@ export default function MedicationsScreen() {
         endDate: endDate ? endDate.toISOString() : undefined,
         instructions: instructions || undefined,
         color,
+        status: 'scheduled' // Define o status inicial como agendado
       };
 
       if (editMode && currentMedication) {
@@ -71,6 +135,7 @@ export default function MedicationsScreen() {
       resetForm();
     } catch (error) {
       console.error('Erro ao salvar medicamento:', error);
+      Alert.alert('Erro', 'Não foi possível salvar o medicamento');
     }
   };
 
@@ -94,106 +159,67 @@ export default function MedicationsScreen() {
     setEndDate(null);
     setInstructions('');
     setColor('#4A90E2');
+    setStatus('scheduled');
   };
-
-  // Componente para o cabeçalho da lista
-  const ListHeader = () => (
-    <View style={styles.header}>
-      <Text style={styles.headerTitle}>Meus Medicamentos</Text>
-      <TouchableOpacity style={styles.addButton} onPress={handleAddMedication}>
-        <Ionicons name="add" size={24} color="#FFFFFF" />
-      </TouchableOpacity>
-    </View>
-  );
-
-  // Componente para quando a lista está vazia
-  const ListEmptyComponent = () => (
-    <View style={styles.emptyContainer}>
-      <Ionicons name="medical" size={60} color="#A0AEC0" />
-      <Text style={styles.emptyTitle}>Sem Medicamentos</Text>
-      <Text style={styles.emptyDescription}>
-        Adicione seus medicamentos para começar a acompanhar seu tratamento
-      </Text>
-      <TouchableOpacity style={styles.emptyAddButton} onPress={handleAddMedication}>
-        <Text style={styles.emptyAddButtonText}>Adicionar Medicamento</Text>
-      </TouchableOpacity>
-    </View>
-  );
 
   // Renderizar item da lista
   const renderItem = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.medicationCard}
+    <TouchableOpacity
+      style={[styles.medicationItem, { borderLeftColor: item.color }]}
       onPress={() => handleEditMedication(item)}
     >
-      <View style={[styles.colorStrip, { backgroundColor: item.color || '#4A90E2' }]} />
-      <View style={styles.cardContent}>
-        <View style={styles.medicationInfo}>
-          <Text style={styles.medicationName}>{item.name}</Text>
-          <Text style={styles.medicationDosage}>{item.dosage}</Text>
-        </View>
-        
-        <View style={styles.scheduleInfo}>
-          <View style={styles.scheduleRow}>
-            <Ionicons name="time-outline" size={16} color="#718096" style={styles.scheduleIcon} />
-            <Text style={styles.scheduleText}>
-              {item.timeOfDay && item.timeOfDay.join(', ')}
-            </Text>
-          </View>
-          
-          <View style={styles.scheduleRow}>
-            <Ionicons name="calendar-outline" size={16} color="#718096" style={styles.scheduleIcon} />
-            <Text style={styles.scheduleText}>
-              {item.frequency === 'daily' ? 'Diariamente' : 
-                item.daysOfWeek ? item.daysOfWeek.map(day => day.charAt(0).toUpperCase() + day.slice(1)).join(', ') : ''}
-            </Text>
-          </View>
-        </View>
-        
-        <View style={styles.actionRow}>
-          <TouchableOpacity 
-            style={styles.actionButton}
-            onPress={() => handleEditMedication(item)}
-          >
-            <Ionicons name="create-outline" size={18} color="#4A90E2" />
-            <Text style={styles.actionText}>Editar</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[styles.actionButton, styles.deleteButton]}
-            onPress={() => handleDeleteMedication(item.id)}
-          >
-            <Ionicons name="trash-outline" size={18} color="#FF6B6B" />
-            <Text style={[styles.actionText, styles.deleteText]}>Excluir</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.medicationInfo}>
+        <Text style={styles.medicationName}>{item.name}</Text>
+        <Text style={styles.medicationDosage}>{item.dosage}</Text>
+        <Text style={styles.medicationTime}>
+          {item.timeOfDay.join(', ')}
+        </Text>
       </View>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => handleDeleteMedication(item.id)}
+      >
+        <Ionicons name="trash-outline" size={24} color="#E53E3E" />
+      </TouchableOpacity>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      {loading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#4A90E2" />
-        </View>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>Meus Medicamentos</Text>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleAddMedication}
+        >
+          <Ionicons name="add" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      </View>
+
+      {loading ? (
+        <ActivityIndicator size="large" color="#4A90E2" style={styles.loader} />
+      ) : (
+        <FlatList
+          data={medications}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.list}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Ionicons name="medical" size={60} color="#A0AEC0" />
+              <Text style={styles.emptyTitle}>Sem Medicamentos</Text>
+              <Text style={styles.emptyDescription}>
+                Adicione seus medicamentos para começar a acompanhar seu tratamento
+              </Text>
+            </View>
+          }
+        />
       )}
-      
-      <FlatList
-        data={medications}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        ListHeaderComponent={ListHeader}
-        ListEmptyComponent={ListEmptyComponent}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
-      
-      {/* Modal para adicionar/editar medicamento */}
+
       <Modal
+        visible={modalVisible}
         animationType="slide"
         transparent={true}
-        visible={modalVisible}
         onRequestClose={() => setModalVisible(false)}
       >
         <View style={styles.modalContainer}>
@@ -203,95 +229,106 @@ export default function MedicationsScreen() {
                 {editMode ? 'Editar Medicamento' : 'Novo Medicamento'}
               </Text>
               <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <Ionicons name="close" size={24} color="#718096" />
+                <Ionicons name="close" size={24} color="#4A5568" />
               </TouchableOpacity>
             </View>
-            
+
             <ScrollView style={styles.formContainer}>
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Nome do Medicamento*</Text>
                 <TextInput
                   style={styles.formInput}
-                  placeholder="ex: Aspirina, Lisinopril"
                   value={name}
                   onChangeText={setName}
+                  placeholder="Ex: Dipirona"
                 />
               </View>
-              
+
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Dosagem*</Text>
                 <TextInput
                   style={styles.formInput}
-                  placeholder="ex: 100mg, 1 comprimido, 2 cápsulas"
                   value={dosage}
                   onChangeText={setDosage}
+                  placeholder="Ex: 500mg"
                 />
               </View>
-              
+
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Cor do Rótulo</Text>
-                <View style={styles.colorPicker}>
-                  {['#4A90E2', '#50C878', '#FF6B6B', '#FFA500', '#9370DB', '#20B2AA', '#FF69B4'].map((colorOption) => (
-                    <TouchableOpacity
-                      key={colorOption}
-                      style={[styles.colorOption, { backgroundColor: colorOption }, color === colorOption && styles.colorOptionSelected]}
-                      onPress={() => setColor(colorOption)}
-                    >
-                      {color === colorOption && <Ionicons name="checkmark" size={16} color="#FFFFFF" />}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-              
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Frequência*</Text>
+                <Text style={styles.formLabel}>Frequência</Text>
                 <View style={styles.frequencyButtons}>
                   <TouchableOpacity
-                    style={[styles.frequencyButton, frequency === 'daily' && styles.frequencyButtonActive]}
+                    style={[
+                      styles.frequencyButton,
+                      frequency === 'daily' && styles.frequencyButtonActive,
+                      { borderTopLeftRadius: 8, borderBottomLeftRadius: 8 }
+                    ]}
                     onPress={() => setFrequency('daily')}
                   >
-                    <Text style={[styles.frequencyButtonText, frequency === 'daily' && styles.frequencyButtonTextActive]}>Diário</Text>
+                    <Text
+                      style={[
+                        styles.frequencyButtonText,
+                        frequency === 'daily' && styles.frequencyButtonTextActive
+                      ]}
+                    >
+                      Diário
+                    </Text>
                   </TouchableOpacity>
-                  
+
                   <TouchableOpacity
-                    style={[styles.frequencyButton, frequency === 'weekly' && styles.frequencyButtonActive]}
+                    style={[
+                      styles.frequencyButton,
+                      frequency === 'weekly' && styles.frequencyButtonActive,
+                      { borderTopRightRadius: 8, borderBottomRightRadius: 8 }
+                    ]}
                     onPress={() => setFrequency('weekly')}
                   >
-                    <Text style={[styles.frequencyButtonText, frequency === 'weekly' && styles.frequencyButtonTextActive]}>Semanal</Text>
+                    <Text
+                      style={[
+                        styles.frequencyButtonText,
+                        frequency === 'weekly' && styles.frequencyButtonTextActive
+                      ]}
+                    >
+                      Semanal
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
-              
+
               {frequency === 'weekly' && (
                 <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Dias da Semana*</Text>
+                  <Text style={styles.formLabel}>Dias da Semana</Text>
                   <View style={styles.daysContainer}>
-                    {['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'].map((day, index) => {
-                      const dayKey = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][index];
-                      const isSelected = daysOfWeek.includes(dayKey);
-                      
-                      return (
-                        <TouchableOpacity
-                          key={dayKey}
-                          style={[styles.dayButton, isSelected && styles.dayButtonSelected]}
-                          onPress={() => {
-                            if (isSelected) {
-                              setDaysOfWeek(daysOfWeek.filter(d => d !== dayKey));
-                            } else {
-                              setDaysOfWeek([...daysOfWeek, dayKey]);
-                            }
-                          }}
+                    {['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((day, index) => (
+                      <TouchableOpacity
+                        key={index}
+                        style={[
+                          styles.dayButton,
+                          daysOfWeek.includes(index) && styles.dayButtonSelected
+                        ]}
+                        onPress={() => {
+                          const updatedDays = daysOfWeek.includes(index)
+                            ? daysOfWeek.filter(d => d !== index)
+                            : [...daysOfWeek, index];
+                          setDaysOfWeek(updatedDays);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.dayButtonText,
+                            daysOfWeek.includes(index) && styles.dayButtonTextSelected
+                          ]}
                         >
-                          <Text style={[styles.dayButtonText, isSelected && styles.dayButtonTextSelected]}>{day.charAt(0)}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
+                          {day}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 </View>
               )}
-              
+
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Horário do Dia*</Text>
+                <Text style={styles.formLabel}>Horários*</Text>
                 <View style={styles.timeContainer}>
                   {selectedTimes.map((time, index) => (
                     <View key={index} style={styles.timeTag}>
@@ -300,120 +337,91 @@ export default function MedicationsScreen() {
                         style={styles.timeTagRemove}
                         onPress={() => setSelectedTimes(selectedTimes.filter((_, i) => i !== index))}
                       >
-                        <Ionicons name="close" size={16} color="#718096" />
+                        <Ionicons name="close-circle" size={16} color="#4A90E2" />
                       </TouchableOpacity>
                     </View>
                   ))}
-                  
                   <TouchableOpacity
                     style={styles.addTimeButton}
                     onPress={() => {
-                      // Abrir um diálogo para selecionar o horário
-                      const hours = new Date().getHours();
-                      const minutes = new Date().getMinutes();
-                      
-                      // Formatar o horário atual como padrão
-                      const formattedHours = hours.toString().padStart(2, '0');
-                      const formattedMinutes = minutes.toString().padStart(2, '0');
-                      const currentTime = `${formattedHours}:${formattedMinutes}`;
-                      
-                      // Usar um horário fixo temporariamente para testes
-                      // Em uma implementação real, usaríamos um DateTimePicker
-                      const addTime = (hour, minute) => {
-                        const formattedTime = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                        if (!selectedTimes.includes(formattedTime)) {
-                          setSelectedTimes([...selectedTimes, formattedTime]);
-                        }
-                      };
-                      
-                      // Mostrar opções de horários comuns
-                      Alert.alert(
-                        'Selecionar Horário',
-                        'Escolha um horário para o medicamento',
-                        [
-                          { text: '08:00 (Manhã)', onPress: () => addTime(8, 0) },
-                          { text: '12:00 (Meio-dia)', onPress: () => addTime(12, 0) },
-                          { text: '18:00 (Tarde)', onPress: () => addTime(18, 0) },
-                          { text: '22:00 (Noite)', onPress: () => addTime(22, 0) },
-                          { 
-                            text: 'Horário Personalizado', 
-                            onPress: () => {
-                              // Mostrar opções para horas
-                              const hoursOptions = [];
-                              for (let i = 0; i < 24; i++) {
-                                hoursOptions.push({ 
-                                  text: i.toString().padStart(2, '0') + ':00', 
-                                  onPress: () => {
-                                    // Agora mostrar opções para minutos
-                                    const minutesOptions = [
-                                      { text: '00', onPress: () => addTime(i, 0) },
-                                      { text: '15', onPress: () => addTime(i, 15) },
-                                      { text: '30', onPress: () => addTime(i, 30) },
-                                      { text: '45', onPress: () => addTime(i, 45) },
-                                      { text: 'Cancelar', style: 'cancel' }
-                                    ];
-                                    
-                                    Alert.alert(
-                                      'Selecionar Minutos',
-                                      `Escolha os minutos para ${i.toString().padStart(2, '0')}:XX`,
-                                      minutesOptions
-                                    );
-                                  }
-                                });
-                              }
-                              
-                              // Adicionar opção de cancelar
-                              hoursOptions.push({ text: 'Cancelar', style: 'cancel' });
-                              
-                              // Dividir as opções em grupos de manhã, tarde e noite para facilitar
-                              Alert.alert(
-                                'Selecionar Hora',
-                                'Escolha a hora:',
-                                [
-                                  { text: 'Manhã (00-11)', onPress: () => {
-                                    Alert.alert('Selecionar Hora (Manhã)', 'Escolha a hora:', hoursOptions.slice(0, 12));
-                                  }},
-                                  { text: 'Tarde (12-23)', onPress: () => {
-                                    Alert.alert('Selecionar Hora (Tarde)', 'Escolha a hora:', hoursOptions.slice(12, 24));
-                                  }},
-                                  { text: 'Cancelar', style: 'cancel' }
-                                ]
-                              );
-                            }
-                          },
-                          { text: 'Cancelar', style: 'cancel' }
-                        ]
-                      )
+                      // Garantir que o DateTimePicker seja exibido no modo de seleção de hora
+                      showPicker('time');
                     }}
                   >
-                    <Ionicons name="add" size={16} color="#4A90E2" />
+                    <Ionicons name="time" size={16} color="#4A90E2" />
                     <Text style={styles.addTimeText}>Adicionar Horário</Text>
                   </TouchableOpacity>
                 </View>
               </View>
-              
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Data de Início*</Text>
+                <TouchableOpacity
+                  style={styles.dateButton}
+                  onPress={() => showPicker('date')}
+                >
+                  <Text style={styles.dateButtonText}>
+                    {format(startDate, 'dd/MM/yyyy')}
+                  </Text>
+                  <Ionicons name="calendar" size={20} color="#4A90E2" />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Cor</Text>
+                <View style={styles.colorPicker}>
+                  {['#4A90E2', '#50E3C2', '#F5A623', '#D0021B', '#9013FE', '#BD10E0', '#7ED321'].map(colorOption => (
+                    <TouchableOpacity
+                      key={colorOption}
+                      style={[
+                        styles.colorOption,
+                        { backgroundColor: colorOption },
+                        color === colorOption && styles.colorOptionSelected
+                      ]}
+                      onPress={() => setColor(colorOption)}
+                    >
+                      {color === colorOption && (
+                        <Ionicons name="checkmark" size={18} color="#FFFFFF" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Instruções (Opcional)</Text>
                 <TextInput
                   style={[styles.formInput, styles.textArea]}
-                  placeholder="ex: Tomar com alimentos, antes de dormir, etc."
                   value={instructions}
                   onChangeText={setInstructions}
+                  placeholder="Ex: Tomar com água, antes das refeições..."
                   multiline
                   numberOfLines={4}
                 />
               </View>
             </ScrollView>
-            
+
+            {showDatePicker && (
+              <DateTimePicker
+                testID="dateTimePicker"
+                value={tempDate}
+                mode={datePickerMode}
+                is24Hour={true}
+                display="default"
+                onChange={onDateTimeChange}
+                minimumDate={datePickerMode === 'date' ? new Date() : undefined}
+              />
+            )}
+
             <View style={styles.modalFooter}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.cancelButton}
                 onPress={() => setModalVisible(false)}
               >
                 <Text style={styles.cancelButtonText}>Cancelar</Text>
               </TouchableOpacity>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.saveButton}
                 onPress={handleSaveMedication}
               >
@@ -432,135 +440,53 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F7FAFC',
   },
-  loadingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 10,
-  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 16,
-    marginBottom: 10,
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDF2F7',
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#2D3748',
-  },
-  addButton: {
-    backgroundColor: '#4A90E2',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#4A90E2',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom: 10,
-  },
-  listContent: {
-    paddingBottom: 24,
-    flexGrow: 1,
-  },
-  medicationCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginBottom: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  colorStrip: {
-    height: 8,
-    backgroundColor: '#4A90E2',
-  },
-  cardContent: {
-    padding: 16,
-  },
-  medicationInfo: {
-    marginBottom: 12,
-  },
-  medicationName: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#2D3748',
-    marginBottom: 4,
-  },
-  medicationDosage: {
-    fontSize: 14,
-    color: '#718096',
-  },
-  scheduleInfo: {
-    marginBottom: 12,
-    backgroundColor: '#F7FAFC',
-    borderRadius: 8,
-    padding: 12,
-  },
-  scheduleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  scheduleIcon: {
-    marginRight: 8,
-  },
-  scheduleText: {
-    fontSize: 14,
-    color: '#4A5568',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    borderTopWidth: 1,
-    borderTopColor: '#EDF2F7',
-    paddingTop: 12,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#4A90E2',
-    marginLeft: 4,
-  },
-  deleteButton: {
-    marginLeft: 'auto',
-  },
-  deleteText: {
-    color: '#FF6B6B',
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-  },
-  emptyTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#2D3748',
+  },
+  addButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  list: {
+    padding: 16,
+    paddingBottom: 80,
+  },
+  loader: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    marginTop: 40,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#4A5568',
     marginTop: 16,
     marginBottom: 8,
   },
@@ -573,13 +499,51 @@ const styles = StyleSheet.create({
   emptyAddButton: {
     backgroundColor: '#4A90E2',
     paddingVertical: 12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   emptyAddButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '500',
+  },
+  medicationItem: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    marginBottom: 12,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+    overflow: 'hidden',
+  },
+  medicationInfo: {
+    flex: 1,
+    padding: 16,
+  },
+  medicationName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+    marginBottom: 4,
+  },
+  medicationDosage: {
+    fontSize: 14,
+    color: '#4A5568',
+    marginBottom: 8,
+  },
+  medicationTime: {
+    fontSize: 14,
+    color: '#718096',
+  },
+  deleteButton: {
+    padding: 16,
+    justifyContent: 'center',
   },
   modalContainer: {
     flex: 1,
@@ -661,29 +625,6 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
-  colorPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginTop: 8,
-  },
-  colorOption: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    marginRight: 12,
-    marginBottom: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  colorOptionSelected: {
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 3,
-  },
   frequencyButtons: {
     flexDirection: 'row',
     marginTop: 8,
@@ -742,6 +683,20 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginTop: 8,
   },
+  dateButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#2D3748',
+  },
   timeTag: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -778,5 +733,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4A90E2',
     marginLeft: 4,
+  },
+  colorPicker: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 8,
+    justifyContent: 'space-between',
+  },
+  colorOption: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    marginRight: 8,
+    marginBottom: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1,
+    elevation: 2,
+  },
+  colorOptionSelected: {
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
 });
