@@ -13,12 +13,18 @@ export default function HistoryScreen({ navigation }) {
   
   // Usar a data atual para definir a semana atual
   const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
+  // Ajustar para o fuso horário local para evitar problemas
+  today.setHours(0, 0, 0, 0);
+  
+  // Calcular o início da semana (domingo)
   const startOfWeek = new Date(today);
+  const dayOfWeek = today.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
   startOfWeek.setDate(today.getDate() - dayOfWeek); // Voltar para o domingo
   
+  // Calcular o fim da semana (sábado)
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(startOfWeek.getDate() + 6); // Avançar 6 dias para o sábado
+  endOfWeek.setHours(23, 59, 59, 999); // Definir para o final do dia
   
   const [currentWeek, setCurrentWeek] = useState({
     start: startOfWeek,
@@ -27,13 +33,29 @@ export default function HistoryScreen({ navigation }) {
 
   // Função para formatar data
   const formatDate = (date) => {
-    return format(date, 'd MMM', { locale: ptBR });
+    return format(date, 'dd/MM', { locale: ptBR });
   };
   
   // Função para formatar hora
   const formatTime = (dateString) => {
-    const date = parseISO(dateString);
-    return format(date, 'HH:mm');
+    if (!dateString) {
+      return '--:--';
+    }
+    
+    try {
+      const date = parseISO(dateString);
+      
+      // Verificar se a data é válida
+      if (isNaN(date.getTime())) {
+        console.log('Data inválida ao formatar hora:', dateString);
+        return '--:--';
+      }
+      
+      return format(date, 'HH:mm');
+    } catch (error) {
+      console.error('Erro ao formatar hora:', error, dateString);
+      return '--:--';
+    }
   };
 
   // Função para ir para a semana anterior
@@ -95,30 +117,78 @@ export default function HistoryScreen({ navigation }) {
       return;
     }
     
+    // Criar cópias das datas para evitar modificações indesejadas
+    const weekStart = new Date(currentWeek.start);
+    weekStart.setHours(0, 0, 0, 0);
+    
+    const weekEnd = new Date(currentWeek.end);
+    weekEnd.setHours(23, 59, 59, 999);
+    
     // Filtrar por semana
     const weeklyHistory = medicationHistory.filter(item => {
-      const itemDate = parseISO(item.timestamp);
-      return isWithinInterval(itemDate, { 
-        start: new Date(currentWeek.start.setHours(0, 0, 0, 0)), 
-        end: new Date(currentWeek.end.setHours(23, 59, 59, 999)) 
-      });
+      // Verificar se o item tem uma data válida
+      if (!item.timestamp && !item.takenAt && !item.missedAt && !item.date) {
+        console.log('Item sem data válida:', item);
+        return false;
+      }
+      
+      try {
+        // Usar a data mais apropriada disponível
+        let itemDateStr = item.date || item.timestamp || item.takenAt || item.missedAt;
+        
+        // Se ainda não tiver data válida, pular este item
+        if (!itemDateStr) {
+          console.log('Item com data inválida:', item);
+          return false;
+        }
+        
+        const itemDate = parseISO(itemDateStr);
+        
+        // Verificar se a data é válida
+        if (isNaN(itemDate.getTime())) {
+          console.log('Data inválida após parse:', itemDateStr);
+          return false;
+        }
+        
+        // Verificar se a data está dentro do intervalo da semana
+        return isWithinInterval(itemDate, { start: weekStart, end: weekEnd });
+      } catch (error) {
+        console.error('Erro ao processar data do item:', error, item);
+        return false;
+      }
     });
     
-    // Filtrar por status (tomado/perdido)
+    // Filtrar por status (tomado/perdido/agendado)
     let filtered = weeklyHistory;
     if (selectedFilter === 'taken') {
-      filtered = weeklyHistory.filter(item => item.status === 'taken');
+      filtered = weeklyHistory.filter(item => item.status === 'taken' || item.status === 'tomado');
     } else if (selectedFilter === 'missed') {
-      filtered = weeklyHistory.filter(item => item.status === 'missed');
+      filtered = weeklyHistory.filter(item => item.status === 'missed' || item.status === 'perdido');
+    } else if (selectedFilter === 'scheduled') {
+      filtered = weeklyHistory.filter(item => item.status === 'scheduled');
     }
     
     setFilteredHistory(filtered);
     
     // Calcular taxa de adesão
     if (weeklyHistory.length > 0) {
-      const takenCount = weeklyHistory.filter(item => item.status === 'taken').length;
-      const adherence = Math.round((takenCount / weeklyHistory.length) * 100);
-      setAdherenceRate(adherence);
+      // Contar apenas medicamentos tomados ou perdidos (ignorar agendados)
+      const relevantItems = weeklyHistory.filter(item => 
+        item.status === 'taken' || item.status === 'tomado' || 
+        item.status === 'missed' || item.status === 'perdido'
+      );
+      
+      if (relevantItems.length > 0) {
+        const takenCount = relevantItems.filter(item => 
+          item.status === 'taken' || item.status === 'tomado'
+        ).length;
+        
+        const adherence = Math.round((takenCount / relevantItems.length) * 100);
+        setAdherenceRate(adherence);
+      } else {
+        // Se só houver medicamentos agendados, mostrar 0%
+        setAdherenceRate(0);
+      }
     } else {
       setAdherenceRate(0);
     }
@@ -144,6 +214,7 @@ export default function HistoryScreen({ navigation }) {
             {formatDate(currentWeek.start)} - {formatDate(currentWeek.end)}, {currentWeek.end.getFullYear()}
           </Text>
           {isCurrentWeek() && <Text style={styles.currentWeekBadge}>Semana Atual</Text>}
+          <Text style={styles.todayDate}>Hoje: {format(new Date(), 'dd/MM/yyyy', { locale: ptBR })}</Text>
         </View>
         
         <TouchableOpacity 
@@ -197,34 +268,58 @@ export default function HistoryScreen({ navigation }) {
             Perdidos
           </Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={[styles.filterButton, selectedFilter === 'scheduled' && styles.filterButtonActive]}
+          onPress={() => setSelectedFilter('scheduled')}
+        >
+          <Text style={[styles.filterText, selectedFilter === 'scheduled' && styles.filterTextActive]}>
+            Agendados
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <Text style={styles.historyLabel}>Histórico ({filteredHistory.length})</Text>
 
       <ScrollView style={styles.historyList} contentContainerStyle={styles.historyContent}>
         {filteredHistory.length > 0 ? (
-          filteredHistory.map((item, index) => (
-            <View key={index} style={styles.historyItem}>
-              <View style={styles.historyItemLeft}>
-                <View style={[styles.statusIndicator, { 
-                  backgroundColor: item.status === 'taken' ? '#50C878' : '#FF6B6B' 
-                }]} />
-                <View>
-                  <Text style={styles.medicationName}>{item.medicationName}</Text>
-                  <Text style={styles.historyTime}>
-                    {formatTime(item.timestamp)} • {format(parseISO(item.timestamp), 'dd/MM/yyyy')}
+          filteredHistory.map((item, index) => {
+            // Determinar o status e as cores com base no status do item
+            const isTaken = item.status === 'taken' || item.status === 'tomado';
+            const isScheduled = item.status === 'scheduled';
+            const isMissed = item.status === 'missed' || item.status === 'perdido';
+            
+            // Definir cores e texto com base no status
+            const statusColor = isTaken ? '#50C878' : isScheduled ? '#4A90E2' : '#FF6B6B';
+            const statusText = isTaken ? 'Tomado' : isScheduled ? 'Agendado' : 'Perdido';
+            
+            // Formatar a data e hora
+            let dateTimeText = 'Data não disponível';
+            if (item.timestamp) {
+              dateTimeText = `${formatTime(item.timestamp)} • ${format(parseISO(item.timestamp), 'dd/MM/yyyy')}`;
+            } else if (item.takenAt) {
+              dateTimeText = `${formatTime(item.takenAt)} • ${format(parseISO(item.takenAt), 'dd/MM/yyyy')}`;
+            } else if (item.date) {
+              dateTimeText = format(parseISO(item.date), 'dd/MM/yyyy');
+            }
+            
+            return (
+              <View key={index} style={styles.historyItem}>
+                <View style={styles.historyItemLeft}>
+                  <View style={[styles.statusIndicator, { backgroundColor: statusColor }]} />
+                  <View>
+                    <Text style={styles.medicationName}>{item.medicationName}</Text>
+                    <Text style={styles.historyTime}>{dateTimeText}</Text>
+                  </View>
+                </View>
+                <View style={styles.historyItemRight}>
+                  <Text style={[styles.statusText, { color: statusColor }]}>
+                    {statusText}
                   </Text>
                 </View>
               </View>
-              <View style={styles.historyItemRight}>
-                <Text style={[styles.statusText, { 
-                  color: item.status === 'taken' ? '#50C878' : '#FF6B6B' 
-                }]}>
-                  {item.status === 'taken' ? 'Tomado' : 'Perdido'}
-                </Text>
-              </View>
-            </View>
-          ))
+            );
+          })
         ) : (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={40} color="#A0AEC0" />
@@ -295,6 +390,13 @@ const styles = StyleSheet.create({
   currentWeekBadge: {
     fontSize: 12,
     color: '#4A90E2',
+    marginBottom: 4,
+  },
+  todayDate: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#4A5568',
+    marginTop: 2,
   },
   adherenceSummary: {
     backgroundColor: '#FFFFFF',

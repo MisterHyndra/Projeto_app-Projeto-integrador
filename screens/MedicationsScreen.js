@@ -455,6 +455,9 @@ const styles = StyleSheet.create({
     color: '#2D3748',
   },
   addButton: {
+    position: 'absolute',
+    bottom: 0,       // 🔽 quanto maior, mais para baixo ele fica
+    right: 24,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -464,8 +467,8 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 2,
+    elevation: 2,
   },
   list: {
     padding: 16,

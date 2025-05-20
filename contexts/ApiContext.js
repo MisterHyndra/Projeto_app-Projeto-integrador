@@ -8,7 +8,7 @@ export const ApiProvider = ({ children }) => {
   useEffect(() => {
     // Usar um endereço IP fixo em vez de detectar automaticamente
     // Isso resolve problemas de conectividade em alguns dispositivos
-    setApiBaseUrl('http://10.42.24.191:3000');
+    setApiBaseUrl('http://192.168.1.2:3000');
   }, []);
 
   return (

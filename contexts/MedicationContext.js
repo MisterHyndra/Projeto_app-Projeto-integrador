@@ -100,19 +100,50 @@ export const MedicationProvider = ({ children }) => {
         await AsyncStorage.setItem(`medications_${user.id}`, JSON.stringify(updatedMedications));
       }
       
-      // Adicionar ao histórico como agendado
-      const historyEntry = {
-        id: Date.now().toString(),
-        type: 'add',
-        status: 'scheduled',
-        medicationId: newMedication.id,
-        medicationName: newMedication.name,
-        scheduledTime: medicationData.timeOfDay ? medicationData.timeOfDay.join(', ') : '',
-        timestamp: currentDate.toISOString(),
-        date: currentDate.toISOString().split('T')[0], // Armazenar apenas a data (YYYY-MM-DD)
-      };
+      // Para cada horário do medicamento, criar uma entrada no histórico como agendado
+      const updatedHistory = [...history];
       
-      const updatedHistory = [...history, historyEntry];
+      if (medicationData.timeOfDay && medicationData.timeOfDay.length > 0) {
+        medicationData.timeOfDay.forEach(timeStr => {
+          // Criar data para o horário agendado
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          const scheduledDate = new Date(currentDate);
+          scheduledDate.setHours(hours, minutes, 0, 0);
+          
+          // Se o horário já passou hoje, agendar para amanhã
+          if (scheduledDate < currentDate) {
+            scheduledDate.setDate(scheduledDate.getDate() + 1);
+          }
+          
+          const historyEntry = {
+            id: `${Date.now().toString()}_${timeStr}`,
+            type: 'scheduled',
+            status: 'scheduled', // Status inicial: agendado
+            medicationId: newMedication.id,
+            medicationName: newMedication.name,
+            scheduledTime: scheduledDate.toISOString(),
+            timestamp: scheduledDate.toISOString(),
+            date: scheduledDate.toISOString().split('T')[0], // Armazenar apenas a data (YYYY-MM-DD)
+          };
+          
+          updatedHistory.push(historyEntry);
+        });
+      } else {
+        // Se não houver horários específicos, criar uma entrada genérica
+        const historyEntry = {
+          id: Date.now().toString(),
+          type: 'add',
+          status: 'scheduled',
+          medicationId: newMedication.id,
+          medicationName: newMedication.name,
+          scheduledTime: '',
+          timestamp: currentDate.toISOString(),
+          date: currentDate.toISOString().split('T')[0], // Armazenar apenas a data (YYYY-MM-DD)
+        };
+        
+        updatedHistory.push(historyEntry);
+      }
+      
       setHistory(updatedHistory);
       
       // Salvar histórico no AsyncStorage
@@ -133,11 +164,18 @@ export const MedicationProvider = ({ children }) => {
   // Atualizar um medicamento existente
   const updateMedication = async (id, medicationData) => {
     try {
-      setMedications(prevMedications => 
-        prevMedications.map(med => 
-          med.id === id ? { ...med, ...medicationData, updatedAt: new Date().toISOString() } : med
-        )
+      const updatedMedications = medications.map(med => 
+        med.id === id ? { ...med, ...medicationData } : med
       );
+      
+      setMedications(updatedMedications);
+      
+      // Atualizar notificações
+      const updatedMedication = updatedMedications.find(med => med.id === id);
+      if (updatedMedication) {
+        scheduleNotificationsForMedication(updatedMedication);
+      }
+      
       return true;
     } catch (error) {
       console.error('Erro ao atualizar medicamento:', error);
@@ -148,9 +186,12 @@ export const MedicationProvider = ({ children }) => {
   // Remover um medicamento
   const deleteMedication = async (id) => {
     try {
-      setMedications(prevMedications => 
-        prevMedications.filter(med => med.id !== id)
-      );
+      const updatedMedications = medications.filter(med => med.id !== id);
+      setMedications(updatedMedications);
+      
+      // Cancelar notificações
+      await cancelNotificationsForMedication(id);
+      
       return true;
     } catch (error) {
       console.error('Erro ao remover medicamento:', error);
@@ -172,11 +213,15 @@ export const MedicationProvider = ({ children }) => {
         id: Date.now().toString(),
         medicationId,
         medicationName: medication.name,
-        scheduledTime,
+        // Garantir que scheduledTime seja uma string válida ou usar a data atual
+        timestamp: scheduledTime || currentDate.toISOString(),
+        scheduledTime: scheduledTime || currentDate.toISOString(),
         takenAt: currentDate.toISOString(),
-        status: 'taken',
+        status: 'taken', // Sempre usar 'taken' em inglês para padronizar
         date: currentDate.toISOString().split('T')[0], // Armazenar apenas a data (YYYY-MM-DD)
       };
+      
+      console.log('Registrando medicamento como tomado:', logEntry);
       
       const updatedHistory = [...history, logEntry];
       setHistory(updatedHistory);
@@ -231,20 +276,32 @@ export const MedicationProvider = ({ children }) => {
   // Calcular a taxa de adesão para um período específico
   const calculateAdherenceRate = (startDate, endDate) => {
     try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      const relevantHistory = history.filter(entry => {
-        const entryDate = new Date(entry.takenAt || entry.missedAt);
-        return entryDate >= start && entryDate <= end;
+      // Filtrar histórico pelo período
+      const periodHistory = history.filter(item => {
+        const itemDate = new Date(item.date || item.timestamp || item.takenAt || item.missedAt);
+        return itemDate >= startDate && itemDate <= endDate;
       });
       
-      if (relevantHistory.length === 0) {
+      if (periodHistory.length === 0) {
         return 0;
       }
       
-      const takenCount = relevantHistory.filter(entry => entry.status === 'taken').length;
-      return Math.round((takenCount / relevantHistory.length) * 100);
+      // Contar medicamentos tomados
+      const takenCount = periodHistory.filter(item => 
+        item.status === 'taken' || item.status === 'tomado'
+      ).length;
+      
+      // Contar total de medicamentos (tomados + perdidos)
+      const totalCount = periodHistory.filter(item => 
+        item.status === 'taken' || item.status === 'tomado' || 
+        item.status === 'missed' || item.status === 'perdido'
+      ).length;
+      
+      if (totalCount === 0) {
+        return 0;
+      }
+      
+      return Math.round((takenCount / totalCount) * 100);
     } catch (error) {
       console.error('Erro ao calcular taxa de adesão:', error);
       return 0;
@@ -254,65 +311,71 @@ export const MedicationProvider = ({ children }) => {
   // Obter o histórico para um período específico
   const getHistoryForPeriod = (startDate, endDate) => {
     try {
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      
-      return history.filter(entry => {
-        const entryDate = new Date(entry.takenAt || entry.missedAt);
-        return entryDate >= start && entryDate <= end;
+      // Filtrar histórico pelo período
+      return history.filter(item => {
+        try {
+          const itemDateStr = item.date || item.timestamp || item.takenAt || item.missedAt;
+          if (!itemDateStr) return false;
+          
+          const itemDate = new Date(itemDateStr);
+          return itemDate >= startDate && itemDate <= endDate;
+        } catch (error) {
+          console.error('Erro ao processar data do item:', error);
+          return false;
+        }
       }).sort((a, b) => {
-        const dateA = new Date(a.takenAt || a.missedAt);
-        const dateB = new Date(b.takenAt || b.missedAt);
-        return dateB - dateA; // Ordenar do mais recente para o mais antigo
+        // Ordenar por data (mais recente primeiro)
+        const getDate = (entry) => {
+          const dateStr = entry.date || entry.timestamp || entry.takenAt || entry.missedAt;
+          return dateStr ? new Date(dateStr) : new Date(0);
+        };
+        
+        return getDate(b) - getDate(a);
       });
     } catch (error) {
-      console.error('Erro ao obter histórico para o período:', error);
+      console.error('Erro ao obter histórico para período:', error);
       return [];
     }
   };
 
   // Obter medicamentos programados para hoje
   const getTodayMedications = () => {
-    // Usar a data atual correta para evitar problemas com fuso horário
-    const today = new Date();
-    // Resetar a hora para comparar apenas as datas
-    today.setHours(0, 0, 0, 0);
-    
-    // Obter o dia da semana atual (0-6, onde 0 é domingo)
-    const dayOfWeekIndex = today.getDay();
-    
-    return medications.filter(med => {
-      // Verificar se o medicamento está dentro do período de tratamento
-      let startDate = null;
-      if (med.startDate) {
-        startDate = new Date(med.startDate);
-        startDate.setHours(0, 0, 0, 0);
-      }
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
       
-      let endDate = null;
-      if (med.endDate) {
-        endDate = new Date(med.endDate);
-        endDate.setHours(0, 0, 0, 0);
-      }
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
       
-      const isWithinTreatmentPeriod = 
-        (!startDate || today >= startDate) && 
-        (!endDate || today <= endDate);
-      
-      if (!isWithinTreatmentPeriod) {
+      // Filtrar medicamentos ativos
+      return medications.filter(med => {
+        // Verificar período de tratamento
+        const startDate = med.startDate ? new Date(med.startDate) : null;
+        const endDate = med.endDate ? new Date(med.endDate) : null;
+        
+        const isWithinTreatmentPeriod = 
+          (!startDate || today >= startDate) && 
+          (!endDate || today <= endDate);
+        
+        if (!isWithinTreatmentPeriod) {
+          return false;
+        }
+        
+        // Verificar frequência
+        if (med.frequency === 'daily') {
+          return true;
+        } else if (med.frequency === 'weekly' && med.daysOfWeek && med.daysOfWeek.length > 0) {
+          // Verificar se o dia atual está na lista de dias selecionados
+          const dayOfWeek = today.getDay(); // 0 = domingo, 1 = segunda, etc.
+          return med.daysOfWeek.includes(dayOfWeek);
+        }
+        
         return false;
-      }
-      
-      // Verificar frequência
-      if (med.frequency === 'daily') {
-        return true;
-      } else if (med.frequency === 'weekly' && med.daysOfWeek && med.daysOfWeek.length > 0) {
-        // Verificar se o dia atual está na lista de dias selecionados
-        return med.daysOfWeek.includes(dayOfWeekIndex);
-      }
-      
-      return false;
-    });
+      });
+    } catch (error) {
+      console.error('Erro ao obter medicamentos para hoje:', error);
+      return [];
+    }
   };
 
   // Limpar o histórico
@@ -379,38 +442,84 @@ export const MedicationProvider = ({ children }) => {
           }),
         });
         
+        // Configurar receptor para processar notificações
+        const subscription = Notifications.addNotificationReceivedListener(notification => {
+          try {
+            const data = notification.request.content.data;
+            
+            // Se for o último lembrete, marcar como perdido após um tempo
+            if (data && data.isReminder && data.reminderNumber === notificationSettings.maxReminders) {
+              const medicationId = data.medicationId;
+              
+              // Verificar se o medicamento existe e não foi tomado
+              if (medicationId) {
+                // Buscar no histórico se o medicamento já foi tomado
+                const medicationHistory = history.filter(item => 
+                  item.medicationId === medicationId && 
+                  item.scheduledTime === data.scheduledTime
+                );
+                
+                const wasTaken = medicationHistory.some(item => 
+                  item.status === 'taken' || item.status === 'tomado'
+                );
+                
+                // Se não foi tomado, marcar como perdido após 5 minutos
+                if (!wasTaken) {
+                  setTimeout(() => {
+                    logMedicationMissed(medicationId, data.scheduledTime);
+                    console.log(`Medicamento ${medicationId} marcado como perdido automaticamente após último lembrete`);
+                  }, 5 * 60 * 1000); // 5 minutos
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Erro ao processar notificação:', error);
+          }
+        });
+        
         console.log('Notificações configuradas com sucesso');
+        
+        return () => {
+          if (subscription) {
+            subscription.remove();
+          }
+        };
       } catch (error) {
         console.error('Erro ao configurar notificações:', error);
       }
     };
     
     configureNotifications();
-  }, [notificationSettings]);
+  }, [notificationSettings, history]);
 
   // Agendar notificação para um medicamento
   const scheduleNotification = async (medicationId, scheduledTime) => {
     try {
       const medication = medications.find(med => med.id === medicationId);
-      if (!medication) return;
+      if (!medication) return null;
       
       // Converter string de data/hora para objeto Date
       let notificationDate;
       if (typeof scheduledTime === 'string') {
-        // Se for uma string ISO, converter para Date
-        if (scheduledTime.includes('T')) {
-          notificationDate = new Date(scheduledTime);
-        } else {
-          // Se for apenas um horário (HH:MM), combinar com a data atual
-          const [hours, minutes] = scheduledTime.split(':').map(Number);
-          notificationDate = new Date();
-          notificationDate.setHours(hours, minutes, 0, 0);
+        try {
+          // Verificar se é uma string ISO
+          if (scheduledTime.includes('T')) {
+            notificationDate = new Date(scheduledTime);
+          } else {
+            // Se for apenas um horário (HH:MM), combinar com a data atual
+            const [hours, minutes] = scheduledTime.split(':').map(Number);
+            notificationDate = new Date();
+            notificationDate.setHours(hours, minutes, 0, 0);
+          }
+        } catch (error) {
+          console.error('Erro ao converter data/hora:', error);
+          return null;
         }
       } else if (scheduledTime instanceof Date) {
         notificationDate = scheduledTime;
       } else {
         console.error('Formato de data/hora inválido:', scheduledTime);
-        return;
+        return null;
       }
       
       // Verificar se a data não está no passado
@@ -421,24 +530,30 @@ export const MedicationProvider = ({ children }) => {
       
       console.log(`Agendando notificação para ${medication.name} em ${notificationDate.toLocaleString()}`);
 
-      const notificationId = await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Hora do Medicamento',
-          body: `Está na hora de tomar ${medication.name} (${medication.dosage})`,
-          sound: notificationSettings.soundEnabled,
-          vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : null,
-          data: { medicationId, scheduledTime: notificationDate.toISOString() },
-        },
-        trigger: {
-          date: notificationDate,
-          channelId: 'medication-reminders',
-        },
-      });
-      
-      console.log(`Notificação agendada com ID: ${notificationId}`);
-      return notificationId;
+      try {
+        const notificationId = await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Hora do Medicamento',
+            body: `Está na hora de tomar ${medication.name} (${medication.dosage || ''})`,
+            sound: notificationSettings.soundEnabled,
+            vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : null,
+            data: { medicationId, scheduledTime: notificationDate.toISOString() },
+          },
+          trigger: {
+            date: notificationDate,
+            channelId: 'medication-reminders',
+          },
+        });
+        
+        console.log(`Notificação agendada com ID: ${notificationId}`);
+        return notificationId;
+      } catch (innerError) {
+        console.error('Erro ao agendar notificação:', innerError);
+        return null;
+      }
     } catch (error) {
-      console.error('Erro ao agendar notificação:', error);
+      console.error('Erro ao preparar notificação:', error);
+      return null;
     }
   };
   
@@ -446,7 +561,7 @@ export const MedicationProvider = ({ children }) => {
   const scheduleNotificationsForMedication = async (medication) => {
     try {
       if (!medication || !medication.timeOfDay || medication.timeOfDay.length === 0) {
-        return;
+        return false;
       }
       
       // Cancelar notificações existentes para este medicamento
@@ -454,44 +569,77 @@ export const MedicationProvider = ({ children }) => {
       
       // Para cada horário do medicamento, agendar uma notificação
       for (const timeStr of medication.timeOfDay) {
-        const [hours, minutes] = timeStr.split(':').map(Number);
-        
-        // Criar data para hoje com o horário especificado
-        const notificationDate = new Date();
-        notificationDate.setHours(hours, minutes, 0, 0);
-        
-        // Se o horário já passou hoje, agendar para amanhã
-        if (notificationDate < new Date()) {
-          notificationDate.setDate(notificationDate.getDate() + 1);
-        }
-        
-        // Agendar notificação principal
-        const notificationId = await scheduleNotification(medication.id, notificationDate);
-        console.log(`Notificação agendada para ${medication.name} às ${timeStr} com ID: ${notificationId}`);
-        
-        // Agendar lembretes adicionais se configurado
-        if (notificationSettings.maxReminders > 0) {
-          for (let i = 1; i <= notificationSettings.maxReminders; i++) {
-            const reminderDate = addMinutes(notificationDate, i * notificationSettings.reminderInterval);
-            const reminderId = await Notifications.scheduleNotificationAsync({
-              content: {
-                title: 'Lembrete de Medicamento',
-                body: `Lembrete: Você ainda não tomou ${medication.name}`,
-                sound: notificationSettings.soundEnabled,
-                vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : null,
-                data: { medicationId: medication.id, isReminder: true, reminderNumber: i },
-              },
-              trigger: {
-                date: reminderDate,
-                channelId: 'medication-reminders',
-              },
-            });
-            console.log(`Lembrete ${i} agendado para ${reminderDate.toLocaleString()} com ID: ${reminderId}`);
+        try {
+          const [hours, minutes] = timeStr.split(':').map(Number);
+          
+          // Criar data para hoje com o horário especificado
+          const notificationDate = new Date();
+          notificationDate.setHours(hours, minutes, 0, 0);
+          
+          // Se o horário já passou hoje, agendar para amanhã
+          if (notificationDate < new Date()) {
+            notificationDate.setDate(notificationDate.getDate() + 1);
           }
+          
+          // Agendar notificação principal
+          const notificationId = await Notifications.scheduleNotificationAsync({
+            content: {
+              title: 'Hora do Medicamento',
+              body: `Está na hora de tomar ${medication.name}`,
+              sound: notificationSettings.soundEnabled,
+              vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : null,
+              data: { medicationId: medication.id, scheduledTime: notificationDate.toISOString() },
+            },
+            trigger: {
+              date: notificationDate,
+              channelId: 'medication-reminders',
+            },
+          });
+          
+          console.log(`Notificação agendada para ${medication.name} às ${timeStr} com ID: ${notificationId}`);
+          
+          // Agendar lembretes adicionais se configurado
+          if (notificationSettings.maxReminders > 0) {
+            for (let i = 1; i <= notificationSettings.maxReminders; i++) {
+              const reminderDate = addMinutes(notificationDate, i * notificationSettings.reminderInterval);
+              
+              // Determinar o texto do lembrete
+              let reminderText = `Lembrete: Você ainda não tomou ${medication.name}`;
+              if (i === notificationSettings.maxReminders) {
+                reminderText = `Último lembrete: ${medication.name} será marcado como perdido se não for tomado`;
+              }
+              
+              const reminderId = await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: `Lembrete de Medicamento ${i}/${notificationSettings.maxReminders}`,
+                  body: reminderText,
+                  sound: notificationSettings.soundEnabled,
+                  vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : null,
+                  data: { 
+                    medicationId: medication.id, 
+                    isReminder: true, 
+                    reminderNumber: i,
+                    scheduledTime: notificationDate.toISOString(),
+                    medicationName: medication.name
+                  },
+                },
+                trigger: {
+                  date: reminderDate,
+                  channelId: 'medication-reminders',
+                },
+              });
+              
+              console.log(`Lembrete ${i} agendado para ${reminderDate.toLocaleString()} com ID: ${reminderId}`);
+            }
+          }
+        } catch (innerError) {
+          console.error(`Erro ao agendar notificação para horário ${timeStr}:`, innerError);
         }
       }
+      return true;
     } catch (error) {
       console.error('Erro ao agendar notificações para medicamento:', error);
+      return false;
     }
   };
   
@@ -511,8 +659,11 @@ export const MedicationProvider = ({ children }) => {
         await Notifications.cancelScheduledNotificationAsync(notification.identifier);
         console.log(`Notificação cancelada: ${notification.identifier}`);
       }
+      
+      return true;
     } catch (error) {
       console.error('Erro ao cancelar notificações:', error);
+      return false;
     }
   };
 

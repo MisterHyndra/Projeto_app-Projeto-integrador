@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useMedication } from '../contexts/MedicationContext';
@@ -9,7 +9,7 @@ import { ApiContext } from '../contexts/ApiContext';
 
 export default function HomeScreen({ navigation }) {
   const { user, logout } = useAuth();
-  const { medications: userMedications } = useMedication();
+  const { medications: userMedications, logMedicationTaken } = useMedication();
   const [medications, setMedications] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [adherenceRate, setAdherenceRate] = useState(85); // Valor de exemplo
@@ -100,9 +100,25 @@ export default function HomeScreen({ navigation }) {
 
   // Marcar medicamento como tomado
   const markMedicationTaken = (id) => {
-    setSchedules(schedules.map(schedule => 
-      schedule.medicationId === id ? { ...schedule, taken: true } : schedule
-    ));
+    // Encontrar o medicamento e o agendamento correspondente
+    const medication = medications.find(med => med.id === id);
+    const schedule = schedules.find(s => s.medicationId === id && !s.taken && !s.skipped);
+    
+    if (medication) {
+      // Atualizar o estado local dos agendamentos
+      if (schedule) {
+        setSchedules(schedules.map(s => 
+          s.id === schedule.id ? { ...s, taken: true } : s
+        ));
+      }
+      
+      // Obter o horário agendado ou usar o horário atual
+      const scheduledTime = schedule?.scheduledTime || new Date().toISOString();
+      
+      // Registrar no histórico usando a função do contexto
+      logMedicationTaken(id, scheduledTime);
+      console.log(`Medicamento ${medication.name} (${id}) marcado como tomado às ${new Date().toLocaleTimeString()}`);
+    }
   };
 
   return (
