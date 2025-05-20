@@ -767,20 +767,31 @@ export const MedicationProvider = ({ children }) => {
         return null;
       }
       
-      // 4. Ajustar para o fuso horário local
-      const timezoneOffset = notificationDate.getTimezoneOffset() * 60000;
-      notificationDate = new Date(notificationDate.getTime() - timezoneOffset);
+      // 4. Criar uma cópia da data para evitar modificar a original
+      const notificationDateCopy = new Date(notificationDate);
       
-      // 5. Verificar se a data não está no passado (com tolerância de 1 minuto)
+      // 5. Ajustar para o fuso horário local (mas não modificar a data)
+      const timezoneOffset = notificationDateCopy.getTimezoneOffset() * 60000;
+      const localTime = new Date(notificationDateCopy.getTime() - timezoneOffset);
+      
+      // 6. Verificar se a data não está no passado (com tolerância de 1 minuto)
       const now = new Date();
       const oneMinuteAgo = new Date(now.getTime() - 60000); // 1 minuto atrás
       
-      if (notificationDate <= oneMinuteAgo) {
-        console.log(`⏭️  Data/hora no passado (${notificationDate.toLocaleString('pt-BR')}), ajustando para amanhã`);
-        notificationDate.setDate(notificationDate.getDate() + 1);
+      console.log(`🕒 Verificando se a data está no passado:`);
+      console.log(`   - Data da notificação: ${localTime.toLocaleString('pt-BR')}`);
+      console.log(`   - Agora: ${now.toLocaleString('pt-BR')}`);
+      
+      if (notificationDateCopy <= oneMinuteAgo) {
+        console.log(`⏭️  Data/hora no passado (${localTime.toLocaleString('pt-BR')}), ajustando para amanhã`);
+        notificationDateCopy.setDate(notificationDateCopy.getDate() + 1);
+        // Atualiza a data de notificação para a cópia modificada
+        notificationDate = new Date(notificationDateCopy);
+      } else {
+        console.log('✅ Data/hora da notificação está no futuro, prosseguindo com o agendamento');
       }
       
-      // 6. Criar um ID único para a notificação
+      // 7. Criar um ID único para a notificação
       const notificationId = `${medicationId}_${notificationDate.getTime()}`;
       if (isReminder) {
         console.log(`   #${reminderNumber} ID: ${notificationId}`);
