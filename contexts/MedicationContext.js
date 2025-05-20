@@ -199,41 +199,170 @@ export const MedicationProvider = ({ children }) => {
     }
   };
 
-  // Registrar uma dose tomada
+  /**
+   * Registra uma dose de medicamento como tomada
+   * @param {string} medicationId - ID do medicamento
+   * @param {string|Date} scheduledTime - Data/hora programada (opcional)
+   * @returns {Promise<boolean>} - Retorna true se o registro for bem-sucedido
+   */
   const logMedicationTaken = async (medicationId, scheduledTime) => {
+    // 1. Validação inicial dos parâmetros
+    if (!medicationId) {
+      console.error('❌ Erro: ID do medicamento não fornecido');
+      return false;
+    }
+
+    console.log(`\n📝 Iniciando registro de medicamento tomado`);
+    console.log(`💊 ID do medicamento: ${medicationId}`);
+    console.log(`⏰ Horário programado: ${scheduledTime || 'Não especificado'}`);
+
     try {
+      // 2. Validar e processar o horário
+      const currentDate = new Date();
+      let timestamp = currentDate.toISOString();
+      let scheduledTimestamp = null;
+
+      // Processar scheduledTime se fornecido
+      if (scheduledTime) {
+        try {
+          scheduledTimestamp = typeof scheduledTime === 'string' 
+            ? new Date(scheduledTime) 
+            : new Date(scheduledTime);
+          
+          // Verificar se a data é válida
+          if (isNaN(scheduledTimestamp.getTime())) {
+            console.warn('⚠️  Data/hora programada inválida, usando data/hora atual');
+            scheduledTimestamp = currentDate;
+          }
+        } catch (error) {
+          console.warn('⚠️  Erro ao processar data/hora programada, usando data/hora atual:', error);
+          scheduledTimestamp = currentDate;
+        }
+      }
+
+      // 3. Encontrar o medicamento
       const medication = medications.find(med => med.id === medicationId);
       
       if (!medication) {
-        throw new Error('Medicamento não encontrado');
+        console.error(`❌ Medicamento não encontrado com o ID: ${medicationId}`);
+        
+        // Mesmo sem encontrar o medicamento, podemos registrar no histórico
+        // para manter um registro completo
+        const errorLog = {
+          id: `error_${Date.now()}`,
+          type: 'error',
+          status: 'error',
+          message: 'Medicamento não encontrado',
+          error: `ID não encontrado: ${medicationId}`,
+          timestamp: timestamp,
+          scheduledTime: scheduledTimestamp ? scheduledTimestamp.toISOString() : null,
+          date: timestamp.split('T')[0]
+        };
+        
+        const updatedHistory = [...history, errorLog];
+        setHistory(updatedHistory);
+        
+        if (isAuthenticated && user?.id) {
+          await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
+        }
+        
+        return false;
       }
-      
-      const currentDate = new Date();
+
+      // 4. Criar entrada de histórico
       const logEntry = {
-        id: Date.now().toString(),
+        id: `taken_${Date.now()}_${medicationId}`,
         medicationId,
         medicationName: medication.name,
-        // Garantir que scheduledTime seja uma string válida ou usar a data atual
-        timestamp: scheduledTime || currentDate.toISOString(),
-        scheduledTime: scheduledTime || currentDate.toISOString(),
-        takenAt: currentDate.toISOString(),
-        status: 'taken', // Sempre usar 'taken' em inglês para padronizar
-        date: currentDate.toISOString().split('T')[0], // Armazenar apenas a data (YYYY-MM-DD)
+        dosage: medication.dosage,
+        timestamp: timestamp,
+        scheduledTime: scheduledTimestamp ? scheduledTimestamp.toISOString() : timestamp,
+        type: 'taken',
+        status: 'taken',
+        date: timestamp.split('T')[0], // Formato YYYY-MM-DD
+        metadata: {
+          source: 'user',
+          deviceTime: new Date().toISOString(),
+          timezoneOffset: currentDate.getTimezoneOffset(),
+          appVersion: '1.0.0' // TODO: Obter da configuração do app
+        }
       };
+
+      console.log('📋 Dados do registro:', JSON.stringify({
+        ...logEntry,
+        scheduledTime: logEntry.scheduledTime || 'N/A'
+      }, null, 2));
       
-      console.log('Registrando medicamento como tomado:', logEntry);
-      
+      // 5. Atualizar o estado local
       const updatedHistory = [...history, logEntry];
       setHistory(updatedHistory);
       
-      // Salvar histórico no AsyncStorage
+      // 6. Persistir no AsyncStorage
       if (isAuthenticated && user?.id) {
-        await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
+        try {
+          await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
+          console.log('💾 Histórico salvo com sucesso no AsyncStorage');
+        } catch (storageError) {
+          console.error('❌ Erro ao salvar no AsyncStorage:', storageError);
+          // Não retornamos false aqui para não falhar a operação principal
+        }
       }
       
+      // 7. Verificar se há notificações pendentes para este horário e cancelá-las
+      if (scheduledTimestamp) {
+        try {
+          const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+          const notificationsToCancel = scheduledNotifications.filter(notification => {
+            const notificationData = notification.content.data;
+            return (
+              notificationData.medicationId === medicationId &&
+              notificationData.scheduledTime === scheduledTimestamp.toISOString()
+            );
+          });
+          
+          if (notificationsToCancel.length > 0) {
+            console.log(`🔔 Cancelando ${notificationsToCancel.length} notificação(ões) pendentes`);
+            await Promise.all(
+              notificationsToCancel.map(n => 
+                Notifications.dismissNotificationAsync(n.identifier)
+              )
+            );
+          }
+        } catch (notificationError) {
+          console.error('⚠️  Erro ao cancelar notificações pendentes:', notificationError);
+          // Continuar mesmo com erro
+        }
+      }
+      
+      console.log('✅ Medicamento registrado como tomado com sucesso!');
       return true;
+      
     } catch (error) {
-      console.error('Erro ao registrar medicamento tomado:', error);
+      console.error('❌ ERRO CRÍTICO ao registrar medicamento tomado:', error);
+      
+      // Tentar registrar o erro no histórico mesmo em caso de falha
+      try {
+        const errorLog = {
+          id: `error_${Date.now()}`,
+          type: 'error',
+          status: 'error',
+          message: 'Falha ao registrar medicamento tomado',
+          error: error.message,
+          timestamp: new Date().toISOString(),
+          medicationId: medicationId || 'unknown',
+          date: new Date().toISOString().split('T')[0]
+        };
+        
+        const errorHistory = [...history, errorLog];
+        setHistory(errorHistory);
+        
+        if (isAuthenticated && user?.id) {
+          await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(errorHistory));
+        }
+      } catch (innerError) {
+        console.error('Falha ao registrar erro no histórico:', innerError);
+      }
+      
       return false;
     }
   };
@@ -241,34 +370,92 @@ export const MedicationProvider = ({ children }) => {
   // Registrar uma dose perdida
   const logMedicationMissed = async (medicationId, scheduledTime) => {
     try {
+      console.log(`Registrando medicamento perdido - ID: ${medicationId}, Horário: ${scheduledTime}`);
+      
+      // Verificar se o medicamento existe na lista de medicamentos
       const medication = medications.find(med => med.id === medicationId);
       
       if (!medication) {
-        throw new Error('Medicamento não encontrado');
+        console.error('Medicamento não encontrado na lista de medicamentos:', medicationId);
+        // Mesmo que não encontre, vamos criar um registro com as informações disponíveis
+        console.log('Criando registro de histórico com informações parciais');
+        
+        const currentDate = new Date();
+        const logEntry = {
+          id: Date.now().toString(),
+          medicationId,
+          medicationName: `Medicamento (ID: ${medicationId})`,
+          scheduledTime: scheduledTime || currentDate.toISOString(),
+          missedAt: currentDate.toISOString(),
+          status: 'missed',
+          date: currentDate.toISOString().split('T')[0],
+          notes: 'Medicamento não encontrado na lista ao registrar como perdido'
+        };
+        
+        const updatedHistory = [...history, logEntry];
+        setHistory(updatedHistory);
+        
+        if (isAuthenticated && user?.id) {
+          await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
+        }
+        
+        return true;
       }
       
       const currentDate = new Date();
       const logEntry = {
-        id: Date.now().toString(),
+        id: `${medicationId}_${currentDate.getTime()}`,
         medicationId,
         medicationName: medication.name,
-        scheduledTime,
+        scheduledTime: scheduledTime || currentDate.toISOString(),
         missedAt: currentDate.toISOString(),
         status: 'missed',
-        date: currentDate.toISOString().split('T')[0], // Armazenar apenas a data (YYYY-MM-DD)
+        date: currentDate.toISOString().split('T')[0],
+        dosage: medication.dosage,
+        timeOfDay: medication.timeOfDay
       };
+      
+      console.log('Criando entrada de histórico para medicamento perdido:', logEntry);
       
       const updatedHistory = [...history, logEntry];
       setHistory(updatedHistory);
       
       // Salvar histórico no AsyncStorage
       if (isAuthenticated && user?.id) {
-        await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
+        try {
+          await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
+          console.log('Histórico de medicamento perdido salvo com sucesso');
+        } catch (storageError) {
+          console.error('Erro ao salvar histórico no AsyncStorage:', storageError);
+          // Não vamos falhar completamente se apenas o salvamento no AsyncStorage falhar
+        }
       }
       
       return true;
     } catch (error) {
       console.error('Erro ao registrar medicamento perdido:', error);
+      // Tentar registrar um log de erro no histórico
+      try {
+        const errorLog = {
+          id: `error_${Date.now()}`,
+          type: 'error',
+          message: 'Falha ao registrar medicamento perdido',
+          error: error.message,
+          medicationId,
+          timestamp: new Date().toISOString(),
+          scheduledTime: scheduledTime || new Date().toISOString()
+        };
+        
+        const errorHistory = [...history, errorLog];
+        setHistory(errorHistory);
+        
+        if (isAuthenticated && user?.id) {
+          await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(errorHistory));
+        }
+      } catch (innerError) {
+        console.error('Falha ao registrar erro no histórico:', innerError);
+      }
+      
       return false;
     }
   };
@@ -414,6 +601,18 @@ export const MedicationProvider = ({ children }) => {
     }
   };
 
+  // Verificar notificações agendadas
+  const checkScheduledNotifications = async () => {
+    try {
+      const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      console.log('Notificações agendadas:', scheduledNotifications.length);
+      return scheduledNotifications;
+    } catch (error) {
+      console.error('Erro ao verificar notificações agendadas:', error);
+      return [];
+    }
+  };
+
   // Configurar notificações
   useEffect(() => {
     const configureNotifications = async () => {
@@ -493,66 +692,157 @@ export const MedicationProvider = ({ children }) => {
   }, [notificationSettings, history]);
 
   // Agendar notificação para um medicamento
-  const scheduleNotification = async (medicationId, scheduledTime) => {
+  const scheduleNotification = async (medication, scheduledTime) => {
+    // 1. Validação inicial dos parâmetros
+    if (!medication || typeof medication !== 'object') {
+      console.error('❌ Erro: Objeto de medicamento inválido ou não fornecido');
+      return null;
+    }
+
+    const medicationId = medication.id;
+    const medicationName = medication.name || 'Medicamento desconhecido';
+    const isReminder = !!medication.isReminder;
+    const reminderNumber = medication.reminderNumber || 0;
+    const reminderText = medication.reminderText || '';
+
+    console.log(`\n📝 Iniciando agendamento de ${isReminder ? 'lembrete' : 'notificação principal'}`);
+    console.log(`💊 Medicamento: ${medicationName} (ID: ${medicationId})`);
+    console.log(`⏰ Horário solicitado: ${scheduledTime}`);
+
     try {
-      const medication = medications.find(med => med.id === medicationId);
-      if (!medication) return null;
+      // 2. Verificar e solicitar permissões de notificação
+      console.log('🔒 Verificando permissões de notificação...');
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
       
-      // Converter string de data/hora para objeto Date
+      if (existingStatus !== 'granted') {
+        console.log('ℹ️  Solicitando permissão de notificação...');
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      
+      if (finalStatus !== 'granted') {
+        console.warn('⚠️  Aviso: Permissão de notificação não concedida pelo usuário');
+        return null;
+      }
+      console.log('✅ Permissão de notificação concedida');
+
+      // 3. Processar e validar a data/hora
+      console.log('📅 Processando data/hora da notificação...');
       let notificationDate;
-      if (typeof scheduledTime === 'string') {
-        try {
-          // Verificar se é uma string ISO
+      try {
+        if (typeof scheduledTime === 'string') {
           if (scheduledTime.includes('T')) {
+            // Formato ISO (2023-01-01T10:00:00)
             notificationDate = new Date(scheduledTime);
-          } else {
-            // Se for apenas um horário (HH:MM), combinar com a data atual
+          } else if (/^\d{1,2}:\d{2}$/.test(scheduledTime)) {
+            // Formato HH:MM
             const [hours, minutes] = scheduledTime.split(':').map(Number);
             notificationDate = new Date();
             notificationDate.setHours(hours, minutes, 0, 0);
+            
+            // Se o horário já passou hoje, agendar para amanhã
+            const now = new Date();
+            if (notificationDate <= now) {
+              console.log(`⏭️  Horário já passou hoje, agendando para amanhã`);
+              notificationDate.setDate(notificationDate.getDate() + 1);
+            }
+          } else {
+            throw new Error(`Formato de horário não reconhecido: ${scheduledTime}`);
           }
-        } catch (error) {
-          console.error('Erro ao converter data/hora:', error);
-          return null;
+        } else if (scheduledTime instanceof Date) {
+          notificationDate = new Date(scheduledTime); // Criar uma nova instância
+        } else {
+          throw new Error(`Tipo de data/hora inválido: ${typeof scheduledTime}`);
         }
-      } else if (scheduledTime instanceof Date) {
-        notificationDate = scheduledTime;
-      } else {
-        console.error('Formato de data/hora inválido:', scheduledTime);
+        
+        // Validar se a data é válida
+        if (isNaN(notificationDate.getTime())) {
+          throw new Error('Data inválida após conversão');
+        }
+        
+        console.log(`📆 Data/hora processada: ${notificationDate.toLocaleString('pt-BR')}`);
+      } catch (error) {
+        console.error(`❌ Erro ao processar data/hora: ${error.message}`);
         return null;
       }
       
-      // Verificar se a data não está no passado
-      if (notificationDate < new Date()) {
-        console.log('Data de notificação no passado, ajustando para amanhã');
+      // 4. Ajustar para o fuso horário local
+      const timezoneOffset = notificationDate.getTimezoneOffset() * 60000;
+      notificationDate = new Date(notificationDate.getTime() - timezoneOffset);
+      
+      // 5. Verificar se a data não está no passado (com tolerância de 1 minuto)
+      const now = new Date();
+      const oneMinuteAgo = new Date(now.getTime() - 60000); // 1 minuto atrás
+      
+      if (notificationDate <= oneMinuteAgo) {
+        console.log(`⏭️  Data/hora no passado (${notificationDate.toLocaleString('pt-BR')}), ajustando para amanhã`);
         notificationDate.setDate(notificationDate.getDate() + 1);
       }
       
-      console.log(`Agendando notificação para ${medication.name} em ${notificationDate.toLocaleString()}`);
-
-      try {
-        const notificationId = await Notifications.scheduleNotificationAsync({
-          content: {
-            title: 'Hora do Medicamento',
-            body: `Está na hora de tomar ${medication.name} (${medication.dosage || ''})`,
-            sound: notificationSettings.soundEnabled,
-            vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : null,
-            data: { medicationId, scheduledTime: notificationDate.toISOString() },
-          },
-          trigger: {
-            date: notificationDate,
-            channelId: 'medication-reminders',
-          },
-        });
-        
-        console.log(`Notificação agendada com ID: ${notificationId}`);
-        return notificationId;
-      } catch (innerError) {
-        console.error('Erro ao agendar notificação:', innerError);
-        return null;
+      // 6. Criar um ID único para a notificação
+      const notificationId = `${medicationId}_${notificationDate.getTime()}`;
+      if (isReminder) {
+        console.log(`   #${reminderNumber} ID: ${notificationId}`);
       }
+      
+      // 7. Verificar se já existe uma notificação agendada com o mesmo ID
+      console.log('🔍 Verificando notificações duplicadas...');
+      const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      const existingNotification = scheduledNotifications.find(
+        n => n.content.data.uniqueId === notificationId
+      );
+      
+      if (existingNotification) {
+        console.log('ℹ️  Notificação já agendada anteriormente, pulando...');
+        return notificationId;
+      }
+      
+      // 8. Preparar o conteúdo da notificação
+      console.log('📝 Preparando conteúdo da notificação...');
+      const notificationContent = {
+        title: isReminder 
+          ? (reminderNumber === notificationSettings.maxReminders 
+              ? '⏰ Último Lembrete!' 
+              : '🔔 Lembrete de Medicamento')
+          : '💊 Hora do Medicamento',
+        
+        body: isReminder && reminderText 
+          ? reminderText 
+          : `Está na hora de tomar ${medicationName}${medication.dosage ? ` (${medication.dosage})` : ''}`,
+        
+        sound: notificationSettings.soundEnabled,
+        vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : undefined,
+        channelId: 'medication-reminders',
+        priority: 'high',
+        data: { 
+          medicationId,
+          scheduledTime: notificationDate.toISOString(),
+          medicationName: medicationName,
+          isReminder,
+          reminderNumber,
+          uniqueId: notificationId,
+          timestamp: Date.now()
+        },
+      };
+
+      // 9. Agendar a notificação
+      console.log('⏳ Agendando notificação...');
+      const scheduledId = await Notifications.scheduleNotificationAsync({
+        content: notificationContent,
+        trigger: notificationDate, // Usando o objeto Date diretamente
+      });
+      
+      // 10. Log de sucesso
+      console.log(`✅ Notificação agendada com sucesso!`);
+      console.log(`   ID: ${scheduledId}`);
+      console.log(`   Para: ${notificationDate.toLocaleString('pt-BR')}`);
+      console.log(`   Tipo: ${isReminder ? `Lembrete ${reminderNumber}/${notificationSettings.maxReminders}` : 'Notificação Principal'}`);
+      
+      return scheduledId;
+      
     } catch (error) {
-      console.error('Erro ao preparar notificação:', error);
+      console.error('❌ ERRO CRÍTICO ao agendar notificação:', error);
       return null;
     }
   };
@@ -560,85 +850,125 @@ export const MedicationProvider = ({ children }) => {
   // Agendar todas as notificações para um medicamento
   const scheduleNotificationsForMedication = async (medication) => {
     try {
-      if (!medication || !medication.timeOfDay || medication.timeOfDay.length === 0) {
+      // Validação inicial dos parâmetros
+      if (!medication || !medication.id) {
+        console.error('Objeto de medicamento inválido ou sem ID');
         return false;
       }
       
-      // Cancelar notificações existentes para este medicamento
-      await cancelNotificationsForMedication(medication.id);
+      if (!Array.isArray(medication.timeOfDay) || medication.timeOfDay.length === 0) {
+        console.error('Nenhum horário definido para o medicamento ou formato inválido');
+        return false;
+      }
       
-      // Para cada horário do medicamento, agendar uma notificação
+      console.log(`\n=== INICIANDO AGENDAMENTO ===`);
+      console.log(`Medicamento: ${medication.name} (ID: ${medication.id})`);
+      console.log(`Horários: ${medication.timeOfDay.join(', ')}`);
+      
+      // 1. Primeiro, cancelamos todas as notificações existentes para este medicamento
+      console.log('\n🔍 Cancelando notificações existentes...');
+      const cancelSuccess = await cancelNotificationsForMedication(medication.id);
+      if (!cancelSuccess) {
+        console.warn('⚠️ Aviso: Não foi possível cancelar todas as notificações existentes');
+        // Continuamos mesmo assim, pois pode ser o primeiro agendamento
+      }
+      
+      // 2. Para cada horário do medicamento, agendamos uma notificação principal
+      console.log('\n⏰ Iniciando agendamento de notificações principais...');
+      let totalScheduled = 0;
+      let totalFailed = 0;
+      
       for (const timeStr of medication.timeOfDay) {
         try {
-          const [hours, minutes] = timeStr.split(':').map(Number);
+          // Validar formato do horário (HH:MM)
+          if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(timeStr)) {
+            console.error(`Formato de horário inválido: ${timeStr}`);
+            totalFailed++;
+            continue;
+          }
+          
+          console.log(`\n🔄 Processando horário: ${timeStr}`);
           
           // Criar data para hoje com o horário especificado
+          const [hours, minutes] = timeStr.split(':').map(Number);
           const notificationDate = new Date();
           notificationDate.setHours(hours, minutes, 0, 0);
           
-          // Se o horário já passou hoje, agendar para amanhã
-          if (notificationDate < new Date()) {
+          // Se o horário já passou hoje, agendamos para amanhã
+          const now = new Date();
+          if (notificationDate <= now) {
+            console.log(`⏭️  Horário ${timeStr} já passou hoje, agendando para amanhã`);
             notificationDate.setDate(notificationDate.getDate() + 1);
           }
           
-          // Agendar notificação principal
-          const notificationId = await Notifications.scheduleNotificationAsync({
-            content: {
-              title: 'Hora do Medicamento',
-              body: `Está na hora de tomar ${medication.name}`,
-              sound: notificationSettings.soundEnabled,
-              vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : null,
-              data: { medicationId: medication.id, scheduledTime: notificationDate.toISOString() },
-            },
-            trigger: {
-              date: notificationDate,
-              channelId: 'medication-reminders',
-            },
-          });
+          console.log(`📅 Agendando notificação principal para: ${notificationDate.toLocaleString('pt-BR')}`);
           
-          console.log(`Notificação agendada para ${medication.name} às ${timeStr} com ID: ${notificationId}`);
+          // 3. Agendar notificação principal
+          const notificationId = await scheduleNotification(medication, notificationDate);
           
-          // Agendar lembretes adicionais se configurado
-          if (notificationSettings.maxReminders > 0) {
+          if (!notificationId) {
+            console.error(`❌ Falha ao agendar notificação principal para ${medication.name} às ${timeStr}`);
+            totalFailed++;
+            continue;
+          }
+          
+          console.log(`✅ Notificação principal agendada com sucesso! ID: ${notificationId}`);
+          totalScheduled++;
+          
+          // 4. Se configurado, agendar lembretes adicionais
+          if (notificationSettings.maxReminders > 0 && notificationSettings.reminderInterval > 0) {
+            console.log(`\n🔔 Configurando ${notificationSettings.maxReminders} lembretes com intervalo de ${notificationSettings.reminderInterval} minutos`);
+            
             for (let i = 1; i <= notificationSettings.maxReminders; i++) {
-              const reminderDate = addMinutes(notificationDate, i * notificationSettings.reminderInterval);
+              const reminderDate = new Date(notificationDate);
+              const minutesToAdd = i * notificationSettings.reminderInterval;
+              reminderDate.setMinutes(reminderDate.getMinutes() + minutesToAdd);
               
               // Determinar o texto do lembrete
               let reminderText = `Lembrete: Você ainda não tomou ${medication.name}`;
               if (i === notificationSettings.maxReminders) {
-                reminderText = `Último lembrete: ${medication.name} será marcado como perdido se não for tomado`;
+                reminderText = `⏰ Último lembrete: ${medication.name} será marcado como perdido se não for tomado`;
               }
               
-              const reminderId = await Notifications.scheduleNotificationAsync({
-                content: {
-                  title: `Lembrete de Medicamento ${i}/${notificationSettings.maxReminders}`,
-                  body: reminderText,
-                  sound: notificationSettings.soundEnabled,
-                  vibrate: notificationSettings.vibrationEnabled ? [0, 250, 250, 250] : null,
-                  data: { 
-                    medicationId: medication.id, 
-                    isReminder: true, 
-                    reminderNumber: i,
-                    scheduledTime: notificationDate.toISOString(),
-                    medicationName: medication.name
-                  },
-                },
-                trigger: {
-                  date: reminderDate,
-                  channelId: 'medication-reminders',
-                },
-              });
+              console.log(`   📌 Lembrete ${i}/${notificationSettings.maxReminders} para: ${reminderDate.toLocaleString('pt-BR')}`);
               
-              console.log(`Lembrete ${i} agendado para ${reminderDate.toLocaleString()} com ID: ${reminderId}`);
+              // Criar um objeto de lembrete com as informações necessárias
+              const reminderMedication = {
+                ...medication,
+                isReminder: true,
+                reminderNumber: i,
+                reminderText: reminderText
+              };
+              
+              // Agendar o lembrete
+              const reminderId = await scheduleNotification(reminderMedication, reminderDate);
+              
+              if (reminderId) {
+                console.log(`   ✅ Lembrete ${i} agendado com sucesso!`);
+                totalScheduled++;
+              } else {
+                console.error(`   ❌ Falha ao agendar lembrete ${i}`);
+                totalFailed++;
+              }
             }
           }
         } catch (innerError) {
-          console.error(`Erro ao agendar notificação para horário ${timeStr}:`, innerError);
+          console.error(`⚠️ Erro inesperado ao processar horário ${timeStr}:`, innerError);
+          totalFailed++;
         }
       }
-      return true;
+      
+      // 5. Relatório final
+      console.log('\n📊 RESUMO DO AGENDAMENTO:');
+      console.log(`✅ Notificações agendadas com sucesso: ${totalScheduled}`);
+      if (totalFailed > 0) {
+        console.warn(`⚠️ Falhas no agendamento: ${totalFailed}`);
+      }
+      
+      return totalScheduled > 0; // Retorna true se pelo menos uma notificação foi agendada
+      
     } catch (error) {
-      console.error('Erro ao agendar notificações para medicamento:', error);
+      console.error('❌ ERRO CRÍTICO ao agendar notificações:', error);
       return false;
     }
   };
@@ -646,21 +976,48 @@ export const MedicationProvider = ({ children }) => {
   // Cancelar todas as notificações para um medicamento
   const cancelNotificationsForMedication = async (medicationId) => {
     try {
+      if (!medicationId) {
+        console.warn('ID do medicamento não fornecido para cancelamento de notificações');
+        return false;
+      }
+      
+      console.log(`Iniciando cancelamento de notificações para o medicamento: ${medicationId}`);
+      
       // Obter todas as notificações agendadas
       const scheduledNotifications = await Notifications.getAllScheduledNotificationsAsync();
+      console.log(`Total de notificações agendadas: ${scheduledNotifications.length}`);
       
       // Filtrar notificações para este medicamento
       const medicationNotifications = scheduledNotifications.filter(
         notification => notification.content.data?.medicationId === medicationId
       );
       
+      console.log(`Encontradas ${medicationNotifications.length} notificações para o medicamento ${medicationId}`);
+      
       // Cancelar cada notificação
+      let successCount = 0;
+      let errorCount = 0;
+      
       for (const notification of medicationNotifications) {
-        await Notifications.cancelScheduledNotificationAsync(notification.identifier);
-        console.log(`Notificação cancelada: ${notification.identifier}`);
+        try {
+          console.log(`Cancelando notificação: ${notification.identifier}`, {
+            title: notification.content.title,
+            scheduledTime: notification.content.data?.scheduledTime || 'não especificado',
+            isReminder: notification.content.data?.isReminder || false
+          });
+          
+          await Notifications.cancelScheduledNotificationAsync(notification.identifier);
+          console.log(`✅ Notificação cancelada com sucesso: ${notification.identifier}`);
+          successCount++;
+        } catch (error) {
+          console.error(`❌ Falha ao cancelar notificação ${notification.identifier}:`, error);
+          errorCount++;
+        }
       }
       
-      return true;
+      console.log(`Cancelamento concluído. Sucessos: ${successCount}, Falhas: ${errorCount}`);
+      
+      return errorCount === 0; // Retorna true apenas se todas as operações foram bem-sucedidas
     } catch (error) {
       console.error('Erro ao cancelar notificações:', error);
       return false;
@@ -685,6 +1042,7 @@ export const MedicationProvider = ({ children }) => {
         notificationSettings,
         updateNotificationSettings,
         scheduleNotification,
+        checkScheduledNotifications, // Adicionando a função ao contexto
       }}
     >
       {children}

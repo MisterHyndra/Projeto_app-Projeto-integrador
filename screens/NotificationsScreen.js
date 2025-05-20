@@ -2,20 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useMedication } from '../contexts/MedicationContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function NotificationsScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
-  const { notificationSettings } = useMedication();
+  const { notificationSettings, medications, savedNotifications, upcomingNotifications, checkScheduledNotifications } = useMedication();
+  const { isAuthenticated, user } = { isAuthenticated: true, user: { id: 'user1' } }; // Simulando contexto de autenticação
+
+  // Atualizar as notificações quando o componente for montado ou quando o foco mudar
+  useEffect(() => {
+    setNotifications(savedNotifications || []);
+    
+    // Verificar notificações agendadas quando a tela receber foco
+    const unsubscribe = navigation.addListener('focus', () => {
+      checkScheduledNotifications();
+    });
+    
+    // Verificar notificações agendadas imediatamente
+    checkScheduledNotifications();
+    
+    return unsubscribe;
+  }, [navigation, savedNotifications, checkScheduledNotifications]);
 
   // Função para marcar notificação como lida
   const handleNotificationPress = (id) => {
-    setNotifications(
-      notifications.map(notification => 
-        notification.id === id 
-          ? { ...notification, isRead: true } 
-          : notification
-      )
+    // Esta função agora é apenas visual, pois as notificações são gerenciadas pelo MedicationContext
+    const updatedNotifications = notifications.map(notification => 
+      notification.id === id 
+        ? { ...notification, isRead: true } 
+        : notification
     );
+    
+    setNotifications(updatedNotifications);
   };
 
   // Função para limpar todas as notificações
@@ -120,16 +141,36 @@ export default function NotificationsScreen({ navigation }) {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Próximas Notificações</Text>
           <View style={styles.divider} />
-          <Text style={styles.infoText}>
-            As notificações serão exibidas aqui quando houver medicamentos agendados.
-          </Text>
+          {upcomingNotifications && upcomingNotifications.length > 0 ? (
+            <FlatList
+              data={upcomingNotifications}
+              renderItem={({ item }) => (
+                <View style={styles.upcomingNotificationItem}>
+                  <View style={styles.upcomingIconContainer}>
+                    <Ionicons name="time-outline" size={18} color="#4A90E2" />
+                  </View>
+                  <View style={styles.upcomingContent}>
+                    <Text style={styles.upcomingTitle}>{item.medicationName}</Text>
+                    <Text style={styles.upcomingTime}>{item.time} • {item.date}</Text>
+                  </View>
+                </View>
+              )}
+              keyExtractor={(item) => item.id || item.medicationId + item.time}
+              scrollEnabled={false}
+              nestedScrollEnabled={true}
+            />
+          ) : (
+            <Text style={styles.infoText}>
+              As notificações serão exibidas aqui quando houver medicamentos agendados.
+            </Text>
+          )}
         </View>
       </ScrollView>
 
       <FlatList
         data={notifications}
         renderItem={renderItem}
-        keyExtractor={(item) => item.id}
+        keyExtractor={(item) => item.id || String(item.timestamp)}
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={ListEmptyComponent}
       />
@@ -292,5 +333,34 @@ const styles = StyleSheet.create({
     color: '#718096',
     textAlign: 'center',
     maxWidth: 300,
+  },
+  upcomingNotificationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDF2F7',
+  },
+  upcomingIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E6F0FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  upcomingContent: {
+    flex: 1,
+  },
+  upcomingTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#2D3748',
+    marginBottom: 2,
+  },
+  upcomingTime: {
+    fontSize: 13,
+    color: '#718096',
   },
 });

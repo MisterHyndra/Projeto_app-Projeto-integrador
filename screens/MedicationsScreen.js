@@ -27,48 +27,75 @@ export default function MedicationsScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState('date');
   const [tempDate, setTempDate] = useState(new Date());
+  const [currentPickerFor, setCurrentPickerFor] = useState(null); // 'date' ou 'time'
 
   // Funções do DateTimePicker
-  const showPicker = (mode) => {
+  const showPicker = (mode, forWhat = null) => {
     setDatePickerMode(mode);
+    setCurrentPickerFor(forWhat || mode);
+    setTempDate(new Date()); // Reset para a data/hora atual
     setShowDatePicker(true);
     
-    // Para dispositivos Android, o DateTimePicker é exibido como um modal
-    // Para iOS, ele é exibido inline
-    if (Platform.OS === 'android') {
-      // No Android, o DateTimePicker é exibido automaticamente
-      console.log(`Abrindo DateTimePicker no modo: ${mode}`);
-    }
+    console.log(`Abrindo DateTimePicker no modo: ${mode} para ${forWhat || 'geral'}`);
   };
 
   const onDateTimeChange = (event, selectedDate) => {
-    // No Android, o DateTimePicker é fechado automaticamente após a seleção
-    // No iOS, precisamos fechá-lo manualmente
-    setShowDatePicker(Platform.OS === 'ios');
-    
-    // Se o usuário cancelou a seleção, não fazemos nada
-    if (event.type === 'dismissed') {
-      return;
-    }
-    
-    // Se o usuário selecionou uma data/hora
-    if (selectedDate) {
-      const currentDate = selectedDate;
-      setTempDate(currentDate);
+    // No iOS, precisamos controlar quando fechar o picker
+    if (Platform.OS === 'ios') {
+      // Se for um evento de cancelamento, apenas fechamos o picker
+      if (event.type === 'dismissed') {
+        setShowDatePicker(false);
+        return;
+      }
       
-      if (datePickerMode === 'date') {
-        // Atualiza a data de início
-        setStartDate(currentDate);
-        console.log(`Data selecionada: ${format(currentDate, 'dd/MM/yyyy')}`);
-      } else {
-        // Adiciona o horário selecionado à lista
-        const timeString = format(currentDate, 'HH:mm');
-        if (!selectedTimes.includes(timeString)) {
-          setSelectedTimes([...selectedTimes, timeString].sort());
-          console.log(`Horário adicionado: ${timeString}`);
-        }
+      // Se selecionou uma data/hora
+      if (selectedDate) {
+        handleDateTimeSelected(selectedDate);
+      }
+    } else {
+      // No Android, o comportamento é diferente
+      setShowDatePicker(false); // Fecha o picker
+      
+      if (event.type !== 'dismissed' && selectedDate) {
+        handleDateTimeSelected(selectedDate);
       }
     }
+  };
+  
+  const handleDateTimeSelected = (selectedDate) => {
+    if (!selectedDate) return;
+    
+    const currentDate = selectedDate;
+    setTempDate(currentDate);
+    
+    if (currentPickerFor === 'date') {
+      // Atualiza a data de início
+      setStartDate(currentDate);
+      console.log(`Data selecionada: ${format(currentDate, 'dd/MM/yyyy')}`);
+    } else if (currentPickerFor === 'time' || datePickerMode === 'time') {
+      // Adiciona o horário selecionado à lista
+      const timeString = format(currentDate, 'HH:mm');
+      if (!selectedTimes.includes(timeString)) {
+        setSelectedTimes(prevTimes => {
+          const newTimes = [...prevTimes, timeString].sort();
+          console.log(`Horário adicionado: ${timeString}. Lista atualizada:`, newTimes);
+          return newTimes;
+        });
+      }
+      
+      // No iOS, mantemos o picker aberto para adicionar mais horários
+      if (Platform.OS === 'ios') {
+        setTempDate(new Date()); // Reseta para a hora atual
+      } else {
+        setShowDatePicker(false);
+      }
+    }
+  };
+  
+  // Função para confirmar a seleção no iOS (quando o usuário clica em "Concluído")
+  const confirmTimeSelection = () => {
+    setShowDatePicker(false);
+    // Não precisamos fazer nada além de fechar, pois já processamos a seleção em onDateTimeChange
   };
 
   // Adicionar um horário específico
@@ -402,15 +429,42 @@ export default function MedicationsScreen() {
             </ScrollView>
 
             {showDatePicker && (
-              <DateTimePicker
-                testID="dateTimePicker"
-                value={tempDate}
-                mode={datePickerMode}
-                is24Hour={true}
-                display="default"
-                onChange={onDateTimeChange}
-                minimumDate={datePickerMode === 'date' ? new Date() : undefined}
-              />
+              <View>
+                {Platform.OS === 'ios' && (
+                  <View style={styles.iosPickerHeader}>
+                    <TouchableOpacity 
+                      onPress={() => setShowDatePicker(false)}
+                      style={styles.iosPickerButton}
+                    >
+                      <Text style={styles.iosPickerButtonText}>Cancelar</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.iosPickerTitle}>
+                      {datePickerMode === 'date' ? 'Selecione a data' : 'Selecione o horário'}
+                    </Text>
+                    <TouchableOpacity 
+                      onPress={confirmTimeSelection}
+                      style={styles.iosPickerButton}
+                    >
+                      <Text style={[styles.iosPickerButtonText, styles.iosPickerConfirmButton]}>
+                        Concluído
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <DateTimePicker
+                  testID="dateTimePicker"
+                  value={tempDate}
+                  mode={datePickerMode}
+                  is24Hour={true}
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={onDateTimeChange}
+                  minimumDate={datePickerMode === 'date' ? new Date() : undefined}
+                  minuteInterval={5} // Intervalo de 5 minutos para facilitar a seleção
+                  themeVariant="light"
+                  textColor="black"
+                  locale="pt-BR"
+                />
+              </View>
             )}
 
             <View style={styles.modalFooter}>
