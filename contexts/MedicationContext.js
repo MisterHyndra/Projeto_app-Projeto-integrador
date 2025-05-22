@@ -613,6 +613,9 @@ export const MedicationProvider = ({ children }) => {
     }
   };
 
+  // Objeto para armazenar os timeouts de notificação
+  const [notificationTimeouts, setNotificationTimeouts] = useState({});
+
   // Configurar notificações
   useEffect(() => {
     const configureNotifications = async () => {
@@ -645,40 +648,102 @@ export const MedicationProvider = ({ children }) => {
         const subscription = Notifications.addNotificationReceivedListener(notification => {
           try {
             const data = notification.request.content.data;
+            console.log('📱 Notificação recebida:', {
+              title: notification.request.content.title,
+              data: data,
+              timestamp: new Date().toISOString()
+            });
             
             // Se for o último lembrete, marcar como perdido após um tempo
             if (data && data.isReminder && data.reminderNumber === notificationSettings.maxReminders) {
               const medicationId = data.medicationId;
+              const scheduledTime = data.scheduledTime;
+              
+              console.log(`🔔 Último lembrete recebido para medicamento ${medicationId} às ${scheduledTime}`);
               
               // Verificar se o medicamento existe e não foi tomado
               if (medicationId) {
                 // Buscar no histórico se o medicamento já foi tomado
                 const medicationHistory = history.filter(item => 
                   item.medicationId === medicationId && 
-                  item.scheduledTime === data.scheduledTime
+                  item.scheduledTime === scheduledTime
                 );
                 
                 const wasTaken = medicationHistory.some(item => 
                   item.status === 'taken' || item.status === 'tomado'
                 );
                 
-                // Se não foi tomado, marcar como perdido após 5 minutos
-                if (!wasTaken) {
-                  setTimeout(() => {
-                    logMedicationMissed(medicationId, data.scheduledTime);
-                    console.log(`Medicamento ${medicationId} marcado como perdido automaticamente após último lembrete`);
-                  }, 5 * 60 * 1000); // 5 minutos
+                if (wasTaken) {
+                  console.log(`✅ Medicamento ${medicationId} já foi tomado, pulando marcação como perdido`);
+                  return;
                 }
+                
+                // Verificar se já existe um registro de "perdido" para este horário
+                const wasAlreadyMarkedAsMissed = medicationHistory.some(item => 
+                  item.status === 'missed' || item.status === 'perdido'
+                );
+                
+                if (wasAlreadyMarkedAsMissed) {
+                  console.log('ℹ️  Medicamento já foi marcado como perdido anteriormente');
+                  return;
+                }
+                
+                // Se não foi tomado, marcar como perdido após 5 minutos
+                console.log(`⏳ Agendando marcação automática como perdido para 5 minutos no futuro`);
+                
+                const timeoutId = setTimeout(async () => {
+                  try {
+                    console.log(`⌛️ Verificando novamente se o medicamento ${medicationId} foi tomado...`);
+                    
+                    // Verificar novamente se o medicamento foi tomado durante a espera
+                    const updatedHistory = [...history];
+                    const wasTakenInMeantime = updatedHistory.some(item => 
+                      item.medicationId === medicationId && 
+                      item.scheduledTime === scheduledTime &&
+                      (item.status === 'taken' || item.status === 'tomado')
+                    );
+                    
+                    if (wasTakenInMeantime) {
+                      console.log(`✅ Medicamento ${medicationId} foi tomado durante a espera, cancelando marcação como perdido`);
+                      return;
+                    }
+                    
+                    // Marcar como perdido
+                    console.log(`⚠️  Marcando medicamento ${medicationId} como perdido (horário: ${scheduledTime})`);
+                    await logMedicationMissed(medicationId, scheduledTime);
+                    
+                    // Atualizar a lista de medicamentos para refletir a mudança
+                    setMedications(prevMedications => 
+                      prevMedications.map(med => 
+                        med.id === medicationId 
+                          ? { ...med, lastStatus: 'missed', lastUpdated: new Date().toISOString() }
+                          : med
+                      )
+                    );
+                    
+                    console.log(`✅ Medicamento ${medicationId} marcado como perdido com sucesso`);
+                  } catch (error) {
+                    console.error('❌ Erro ao marcar medicamento como perdido:', error);
+                  }
+                }, 5 * 60 * 1000); // 5 minutos
+                
+                // Armazenar o timeoutId para possível cancelamento
+                notificationTimeouts[`${medicationId}_${scheduledTime}`] = timeoutId;
               }
             }
           } catch (error) {
-            console.error('Erro ao processar notificação:', error);
+            console.error('❌ Erro ao processar notificação:', error);
           }
         });
         
         console.log('Notificações configuradas com sucesso');
         
         return () => {
+          // Limpar todos os timeouts pendentes
+          console.log('Limpando timeouts de notificação...');
+          Object.values(notificationTimeouts).forEach(clearTimeout);
+          
+          // Limpar o listener de notificações
           if (subscription) {
             subscription.remove();
           }
