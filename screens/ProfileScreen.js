@@ -1,5 +1,6 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Switch, ScrollView, SafeAreaView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Switch, ScrollView, SafeAreaView, Alert, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,6 +12,7 @@ export default function ProfileScreen({ navigation }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.nome || '');
   const [email, setEmail] = useState(user?.email || '');
+  const [profileImage, setProfileImage] = useState(null);
   
   const [editingEmergencyContact, setEditingEmergencyContact] = useState(false);
   const [emergencyName, setEmergencyName] = useState('');
@@ -20,8 +22,22 @@ export default function ProfileScreen({ navigation }) {
   
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   
-  // Carregar contato de emergência existente quando o componente for montado
+  // Carregar dados do perfil e foto quando o componente for montado
   useEffect(() => {
+    const loadProfileImage = async () => {
+      try {
+        const savedImage = await AsyncStorage.getItem('@profile_image');
+        if (savedImage) {
+          setProfileImage(savedImage);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar imagem de perfil:', error);
+      }
+    };
+    
+    loadProfileImage();
+    
+    // Carregar contato de emergência existente quando o componente for montado
     const loadEmergencyContact = async () => {
       try {
         const token = await AsyncStorage.getItem('userToken');
@@ -53,10 +69,47 @@ export default function ProfileScreen({ navigation }) {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [emergencyAlertsEnabled, setEmergencyAlertsEnabled] = useState(true);
   
-  const handleSaveProfile = () => {
-    // Aqui você implementaria a lógica para salvar o perfil
-    console.log('Salvando perfil:', { name, email });
-    setEditing(false);
+  const pickImage = async () => {
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permissão necessária', 'Precisamos de permissão para acessar suas fotos.');
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5,
+      });
+
+      if (!result.canceled) {
+        const selectedImage = result.assets[0].uri;
+        setProfileImage(selectedImage);
+        // Salvar a URI da imagem no AsyncStorage
+        await AsyncStorage.setItem('@profile_image', selectedImage);
+      }
+    } catch (error) {
+      console.error('Erro ao selecionar imagem:', error);
+      Alert.alert('Erro', 'Não foi possível selecionar a imagem. Tente novamente.');
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      // Aqui você pode adicionar a lógica para salvar outros dados do perfil
+      console.log('Salvando perfil:', { name, email });
+      
+      // Se houver uma imagem selecionada, ela já foi salva no AsyncStorage
+      // Você pode adicionar aqui a lógica para enviar para um servidor se necessário
+      
+      setEditing(false);
+      Alert.alert('Sucesso', 'Perfil atualizado com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar perfil:', error);
+      Alert.alert('Erro', 'Não foi possível salvar o perfil. Tente novamente.');
+    }
   };
   
   const handleSaveEmergencyContact = async () => {
@@ -223,10 +276,17 @@ export default function ProfileScreen({ navigation }) {
         <Text style={styles.headerTitle}>Perfil</Text>
       </View>
       
-      <View style={styles.profileCard}>
-        <View style={styles.avatarContainer}>
-          <Ionicons name="person-circle" size={80} color="#4A90E2" />
-        </View>
+      <View style={styles.profileHeader}>
+        <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
+          {profileImage ? (
+            <Image source={{ uri: profileImage }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatarPlaceholder}>
+              <Ionicons name="person" size={40} color="#666" />
+              <Text style={styles.avatarText}>Adicionar foto</Text>
+            </View>
+          )}
+        </TouchableOpacity>
         
         {editing ? (
           <View style={styles.editForm}>
@@ -467,7 +527,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#2D3748',
   },
-  profileCard: {
+  profileHeader: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 24,
@@ -484,13 +544,29 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   avatarContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#EBF8FF',
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#E9ECEF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    alignSelf: 'center',
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPlaceholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    marginTop: 5,
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
   },
   profileInfo: {
     alignItems: 'center',

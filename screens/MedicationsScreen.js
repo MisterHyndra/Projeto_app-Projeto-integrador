@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { Pill } from 'lucide-react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { format } from 'date-fns';
 import React, { useState } from 'react';
@@ -233,7 +234,9 @@ export default function MedicationsScreen() {
           contentContainerStyle={styles.list}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="medical" size={60} color="#A0AEC0" />
+              <View style={{ alignItems: 'center' }}>
+                <Pill size={60} color="#4A90E2" />
+              </View>
               <Text style={styles.emptyTitle}>Sem Medicamentos</Text>
               <Text style={styles.emptyDescription}>
                 Adicione seus medicamentos para começar a acompanhar seu tratamento

@@ -34,7 +34,7 @@ function TabNavigator() {
           if (route.name === 'HomeTab') {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'MedicationsTab') {
-            iconName = focused ? 'medical' : 'medical-outline';
+            iconName = focused ? 'medkit' : 'medkit-outline';
           } else if (route.name === 'HistoryTab') {
             iconName = focused ? 'time' : 'time-outline';
           } else if (route.name === 'NotificationsTab') {
