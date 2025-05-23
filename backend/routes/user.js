@@ -112,10 +112,20 @@ router.get('/emergency-contacts', async (req, res) => {
 // Adicionar contato de emergência
 router.post('/emergency-contacts', async (req, res) => {
   try {
+    console.log('Adicionando contato de emergência para o usuário ID:', req.user.id);
+    console.log('Dados recebidos:', req.body);
+    
     const { nome, telefone, relacao, email, isPrimary } = req.body;
     
     if (!nome || !telefone) {
       return res.status(400).json({ message: 'Nome e telefone são obrigatórios' });
+    }
+    
+    // Verificar se o usuário existe
+    const user = await User.findByPk(req.user.id);
+    if (!user) {
+      console.error('Usuário não encontrado com ID:', req.user.id);
+      return res.status(404).json({ message: 'Usuário não encontrado' });
     }
     
     // Se este for definido como primário, remover o status primário de outros contatos
@@ -126,6 +136,8 @@ router.post('/emergency-contacts', async (req, res) => {
       );
     }
     
+    console.log('Criando contato de emergência para o usuário ID:', req.user.id);
+    
     const contact = await EmergencyContact.create({
       userId: req.user.id,
       nome,
@@ -134,6 +146,8 @@ router.post('/emergency-contacts', async (req, res) => {
       email,
       isPrimary: isPrimary || false
     });
+    
+    console.log('Contato de emergência criado com sucesso:', contact.toJSON());
     
     res.status(201).json({
       message: 'Contato de emergência adicionado com sucesso',

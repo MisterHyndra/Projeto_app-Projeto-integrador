@@ -2,8 +2,11 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { Sequelize, Op } = require('sequelize');
+const nodemailer = require('nodemailer');
+require('dotenv').config();
 
 // Configuração do banco de dados
+// Configuração do Sequelize para forçar nomes de tabelas em minúsculas
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -12,11 +15,18 @@ const sequelize = new Sequelize(
     host: process.env.DB_HOST,
     port: process.env.DB_PORT,
     dialect: 'postgres',
-    logging: false,
+    logging: console.log, // Ativar logs para depuração
     define: {
       timestamps: true,
-      underscored: true,
+      freezeTableName: true, // Usar nomes de tabelas exatamente como definidos
+      underscored: true, // Usar snake_case para nomes de colunas
     },
+    // Desativar a conversão de nomes para minúsculas
+    quoteIdentifiers: false,
+    // Desativar a transformação de nomes de colunas
+    caseModel: 'pascal', // Manter o nome do modelo como está
+    caseFile: 'pascal', // Manter o nome do arquivo como está
+    quoteTableName: true // Forçar o uso de aspas nos nomes das tabelas
   }
 );
 
@@ -39,22 +49,23 @@ const MedicationLog = require('./models/medicationLog');
 const EmergencyContact = require('./models/emergencyContact');
 
 // Definir associações entre modelos
-User.hasMany(Medication, { foreignKey: 'userId' });
-Medication.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(Medication, { foreignKey: 'user_id' });
+Medication.belongsTo(User, { foreignKey: 'user_id' });
 
-User.hasMany(MedicationLog, { foreignKey: 'userId' });
-MedicationLog.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(MedicationLog, { foreignKey: 'user_id' });
+MedicationLog.belongsTo(User, { foreignKey: 'user_id' });
 
-Medication.hasMany(MedicationLog, { foreignKey: 'medicationId' });
-MedicationLog.belongsTo(Medication, { foreignKey: 'medicationId' });
+Medication.hasMany(MedicationLog, { foreignKey: 'medication_id' });
+MedicationLog.belongsTo(Medication, { foreignKey: 'medication_id' });
 
-User.hasMany(EmergencyContact, { foreignKey: 'userId' });
-EmergencyContact.belongsTo(User, { foreignKey: 'userId' });
+User.hasMany(EmergencyContact, { foreignKey: 'user_id' });
+EmergencyContact.belongsTo(User, { foreignKey: 'user_id' });
 
-// Rotas
-const authRoutes = require('./routes/auth');
+// Importar rotas
 const userRoutes = require('./routes/user');
 const medicationRoutes = require('./routes/medication');
+const authRoutes = require('./routes/auth');
+const notificationRoutes = require('./routes/notificationRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -70,6 +81,7 @@ testConnection();
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/medications', medicationRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Rota de teste
 app.get('/', (req, res) => {

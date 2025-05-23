@@ -10,10 +10,16 @@ const EmergencyContact = sequelize.define('EmergencyContact', {
   userId: {
     type: DataTypes.INTEGER,
     allowNull: false,
+    field: 'user_id',
     references: {
-      model: 'Users',
+      model: {
+        tableName: 'users',
+        schema: 'public'
+      },
       key: 'id'
-    }
+    },
+    onDelete: 'CASCADE',
+    onUpdate: 'CASCADE'
   },
   nome: {
     type: DataTypes.STRING,
@@ -34,8 +40,14 @@ const EmergencyContact = sequelize.define('EmergencyContact', {
   },
   isPrimary: {
     type: DataTypes.BOOLEAN,
+    field: 'is_primary',
     defaultValue: false
   }
+}, {
+  tableName: 'emergency_contacts',
+  freezeTableName: true,
+  timestamps: true,
+  underscored: true
 });
 
 module.exports = EmergencyContact;

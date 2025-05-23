@@ -28,7 +28,8 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING
   },
   dataNascimento: {
-    type: DataTypes.DATEONLY
+    type: DataTypes.DATEONLY,
+    field: 'data_nascimento'
   },
   genero: {
     type: DataTypes.STRING
@@ -43,9 +44,14 @@ const User = sequelize.define('User', {
     type: DataTypes.TEXT
   },
   condicoesMedicas: {
-    type: DataTypes.TEXT
+    type: DataTypes.TEXT,
+    field: 'condicoes_medicas'
   }
 }, {
+  tableName: 'users',
+  freezeTableName: true,
+  timestamps: true,
+  underscored: true,
   hooks: {
     beforeCreate: async (user) => {
       if (user.senha) {

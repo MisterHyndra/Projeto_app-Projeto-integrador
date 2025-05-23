@@ -374,14 +374,16 @@ export const MedicationProvider = ({ children }) => {
       
       // Verificar se o medicamento existe na lista de medicamentos
       const medication = medications.find(med => med.id === medicationId);
+      const currentDate = new Date();
+      let logEntry;
+      let updatedHistory;
       
       if (!medication) {
         console.error('Medicamento não encontrado na lista de medicamentos:', medicationId);
         // Mesmo que não encontre, vamos criar um registro com as informações disponíveis
         console.log('Criando registro de histórico com informações parciais');
         
-        const currentDate = new Date();
-        const logEntry = {
+        logEntry = {
           id: Date.now().toString(),
           medicationId,
           medicationName: `Medicamento (ID: ${medicationId})`,
@@ -392,18 +394,32 @@ export const MedicationProvider = ({ children }) => {
           notes: 'Medicamento não encontrado na lista ao registrar como perdido'
         };
         
-        const updatedHistory = [...history, logEntry];
+        updatedHistory = [...history, logEntry];
         setHistory(updatedHistory);
         
         if (isAuthenticated && user?.id) {
-          await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
+          try {
+            await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
+            
+            // Tenta notificar contatos de emergência mesmo sem todas as informações
+            try {
+              await api.post('/notifications/medication-missed', {
+                medicationName: `Medicamento (ID: ${medicationId})`,
+                scheduledTime: scheduledTime || currentDate.toISOString()
+              });
+            } catch (error) {
+              console.error('Erro ao notificar contatos de emergência:', error);
+            }
+          } catch (storageError) {
+            console.error('Erro ao salvar histórico no AsyncStorage:', storageError);
+          }
         }
         
         return true;
       }
       
-      const currentDate = new Date();
-      const logEntry = {
+      // Se encontrou o medicamento, cria um registro mais completo
+      logEntry = {
         id: `${medicationId}_${currentDate.getTime()}`,
         medicationId,
         medicationName: medication.name,
@@ -417,14 +433,32 @@ export const MedicationProvider = ({ children }) => {
       
       console.log('Criando entrada de histórico para medicamento perdido:', logEntry);
       
-      const updatedHistory = [...history, logEntry];
+      updatedHistory = [...history, logEntry];
       setHistory(updatedHistory);
       
-      // Salvar histórico no AsyncStorage
+      // Salvar histórico no AsyncStorage e notificar contatos de emergência
       if (isAuthenticated && user?.id) {
         try {
           await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
           console.log('Histórico de medicamento perdido salvo com sucesso');
+          
+          // Notificar contatos de emergência
+          try {
+            console.log('Notificando contatos de emergência...');
+            const response = await api.post('/notifications/medication-missed', {
+              medicationName: medication.name,
+              scheduledTime: scheduledTime || currentDate.toISOString()
+            });
+            
+            if (response.data.success) {
+              console.log('Contatos de emergência notificados com sucesso');
+            } else {
+              console.warn('Aviso: Não foi possível notificar todos os contatos de emergência', 
+                response.data.details);
+            }
+          } catch (error) {
+            console.error('Erro ao notificar contatos de emergência:', error);
+          }
         } catch (storageError) {
           console.error('Erro ao salvar histórico no AsyncStorage:', storageError);
           // Não vamos falhar completamente se apenas o salvamento no AsyncStorage falhar

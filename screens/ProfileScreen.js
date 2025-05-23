@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, Switch, ScrollView, SafeAreaView } from 'react-native';
+import React, { useState, useContext, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, Switch, ScrollView, SafeAreaView, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { ApiContext } from '../contexts/ApiContext';
 
 export default function ProfileScreen({ navigation }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isAuthenticated } = useAuth();
+  const { apiBaseUrl } = useContext(ApiContext);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(user?.nome || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -16,6 +19,37 @@ export default function ProfileScreen({ navigation }) {
   const [emergencyRelationship, setEmergencyRelationship] = useState('');
   
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  
+  // Carregar contato de emergência existente quando o componente for montado
+  useEffect(() => {
+    const loadEmergencyContact = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (!token) return;
+        
+        const response = await fetch(`${apiBaseUrl}/api/users/emergency-contacts`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.length > 0) {
+            const contact = data[0]; // Pega o primeiro contato (assumindo que há apenas um por enquanto)
+            setEmergencyName(contact.nome);
+            setEmergencyEmail(contact.email || '');
+            setEmergencyPhone(contact.telefone);
+            setEmergencyRelationship(contact.relacao || '');
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao carregar contato de emergência:', error);
+      }
+    };
+    
+    loadEmergencyContact();
+  }, [apiBaseUrl]);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [emergencyAlertsEnabled, setEmergencyAlertsEnabled] = useState(true);
   
@@ -25,15 +59,155 @@ export default function ProfileScreen({ navigation }) {
     setEditing(false);
   };
   
-  const handleSaveEmergencyContact = () => {
-    // Aqui você implementaria a lógica para salvar o contato de emergência
-    console.log('Salvando contato de emergência:', { 
-      emergencyName, 
-      emergencyEmail, 
-      emergencyPhone, 
-      emergencyRelationship 
-    });
-    setEditingEmergencyContact(false);
+  const handleSaveEmergencyContact = async () => {
+    // Verificar se o usuário está autenticado
+    if (!isAuthenticated) {
+      Alert.alert('Erro', 'Você precisa estar autenticado para adicionar um contato de emergência');
+      return;
+    }
+    
+    try {
+      
+      // Validar campos obrigatórios
+      if (!emergencyName || !emergencyPhone) {
+        Alert.alert('Erro', 'Nome e telefone são obrigatórios');
+        return;
+      }
+      
+      console.log('Salvando contato de emergência para o usuário ID:', user?.id || 'não definido');
+      console.log('Dados do contato:', { 
+        emergencyName, 
+        emergencyEmail, 
+        emergencyPhone, 
+        emergencyRelationship 
+      });
+      
+      // Obter o token do AsyncStorage
+      console.log('Buscando token no AsyncStorage...');
+      const token = await AsyncStorage.getItem('userToken');
+      console.log('Token encontrado no AsyncStorage:', token ? 'Sim' : 'Não');
+      
+      if (!token) {
+        console.error('Token não encontrado no AsyncStorage');
+        throw new Error('Token de autenticação não encontrado');
+      }
+      
+      console.log('Token encontrado (primeiros 10 caracteres):', token.substring(0, 10) + '...');
+      
+      // Verificar se o usuário está autenticado
+      console.log('Usuário autenticado?', isAuthenticated);
+      console.log('Dados do usuário:', user);
+      
+      if (!user?.id) {
+        console.error('ID do usuário não encontrado');
+        throw new Error('ID do usuário não encontrado');
+      }
+      
+      console.log('Preparando requisição para:', `${apiBaseUrl}/api/users/emergency-contacts`);
+      
+      // Preparar os cabeçalhos
+      const headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      };
+      
+      console.log('Headers da requisição:', JSON.stringify(headers, null, 2));
+      
+      // Preparar o corpo da requisição
+      const body = {
+        nome: emergencyName,
+        email: emergencyEmail,
+        telefone: emergencyPhone,
+        relacao: emergencyRelationship,
+        isPrimary: true // Definir como contato primário
+      };
+      
+      console.log('Corpo da requisição:', JSON.stringify(body, null, 2));
+      
+      // Fazer a chamada para a API
+      console.log('Iniciando chamada fetch...');
+      const response = await fetch(`${apiBaseUrl}/api/users/emergency-contacts`, {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify(body)
+      });
+      
+      console.log('Resposta recebida. Status:', response.status);
+      
+      let result;
+      const responseText = await response.text();
+      console.log('Texto da resposta:', responseText);
+      
+      try {
+        result = responseText ? JSON.parse(responseText) : {};
+        console.log('Resposta parseada:', JSON.stringify(result, null, 2));
+      } catch (e) {
+        console.error('Erro ao fazer parse da resposta:', e);
+        console.error('Conteúdo da resposta que falhou ao fazer parse:', responseText);
+        throw new Error('Resposta inválida do servidor');
+      }
+      
+      if (!response.ok) {
+        const errorDetails = {
+          status: response.status,
+          statusText: response.statusText,
+          url: response.url,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: result
+        };
+        
+        console.error('Erro na resposta:', JSON.stringify(errorDetails, null, 2));
+        
+        // Verificar se é um erro de autenticação
+        if (response.status === 401) {
+          throw new Error('Sessão expirada. Por favor, faça login novamente.');
+        }
+        
+        throw new Error(result.message || `Erro ao salvar contato de emergência (${response.status} ${response.statusText})`);
+      }
+      console.log('Contato de emergência salvo com sucesso:', result);
+      
+      // Atualizar o estado do perfil para refletir as alterações
+      setEditingEmergencyContact(false);
+      
+      // Atualizar os estados locais com os dados do contato salvo
+      if (result.contact) {
+        setEmergencyName(result.contact.nome);
+        setEmergencyEmail(result.contact.email || '');
+        setEmergencyPhone(result.contact.telefone);
+        setEmergencyRelationship(result.contact.relacao || '');
+      }
+      
+      // Mostrar mensagem de sucesso
+      Alert.alert(
+        'Sucesso', 
+        'Contato de emergência salvo com sucesso!',
+        [
+          {
+            text: 'OK',
+            onPress: () => console.log('Alerta de sucesso fechado')
+          }
+        ]
+      );
+      
+    } catch (error) {
+      console.error('Erro ao salvar contato de emergência:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack,
+        response: error.response
+      });
+      Alert.alert(
+        'Erro',
+        error.message || 'Erro ao salvar contato de emergência. Tente novamente.',
+        [
+          { 
+            text: 'OK',
+            onPress: () => console.log('Alerta de erro fechado')
+          }
+        ]
+      );
+    }
   };
   
   const handleLogout = async () => {
