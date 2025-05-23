@@ -1,20 +1,23 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO, addMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { useAuth } from './AuthContext';
-import axios from 'axios';
-
-// Configuração da instância do axios
-const api = axios.create({
-  baseURL: 'http://localhost:3000', // Servidor backend rodando na porta 3000
-  timeout: 5000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+
+// Importar configurações e serviços
+import { API_CONFIG } from '../config';
+import api, { setAuthToken } from '../services/api';
+import { useAuth } from './AuthContext';
+
+// Configuração das notificações
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 const MedicationContext = createContext();
 
@@ -27,12 +30,33 @@ export const MedicationProvider = ({ children }) => {
   const [notificationSettings, setNotificationSettings] = useState({
     soundEnabled: true,
     vibrationEnabled: true,
-    reminderInterval: 5, // minutes
+    reminderInterval: 1, // minutes (changed from 5 to 1)
     maxReminders: 3
   });
   const { isAuthenticated, user } = useAuth();
 
-  // Carregar medicamentos do AsyncStorage quando o componente for montado
+  // Carregar token de autenticação quando o componente for montado
+  useEffect(() => {
+    const loadToken = async () => {
+      try {
+        const token = await AsyncStorage.getItem('userToken');
+        if (token) {
+          setAuthToken(token);
+          console.log('✅ Token carregado com sucesso');
+        } else {
+          console.log('ℹ️ Nenhum token encontrado');
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar token:', error);
+      }
+    };
+    
+    if (isAuthenticated) {
+      loadToken();
+    }
+  }, [isAuthenticated]);
+
+  // Carregar medicamentos do AsyncStorage quando o usuário estiver autenticado
   useEffect(() => {
     const loadMedications = async () => {
       try {
@@ -413,7 +437,7 @@ export const MedicationProvider = ({ children }) => {
             
             // Tenta notificar contatos de emergência mesmo sem todas as informações
             try {
-              await api.post('/notifications/medication-missed', {
+              await api.post('/api/notifications/medication-missed', {
                 medicationName: `Medicamento (ID: ${medicationId})`,
                 scheduledTime: scheduledTime || currentDate.toISOString()
               });
@@ -455,7 +479,7 @@ export const MedicationProvider = ({ children }) => {
           // Notificar contatos de emergência
           try {
             console.log('Notificando contatos de emergência...');
-            const response = await api.post('/notifications/medication-missed', {
+            const response = await api.post('/api/notifications/medication-missed', {
               medicationName: medication.name,
               scheduledTime: scheduledTime || currentDate.toISOString()
             });
@@ -657,8 +681,8 @@ export const MedicationProvider = ({ children }) => {
     }
   };
 
-  // Objeto para armazenar os timeouts de notificação
-  const [notificationTimeouts, setNotificationTimeouts] = useState({});
+  // Referência para armazenar os timeouts de notificação
+  const notificationTimeoutsRef = useRef({});
 
   // Configurar notificações
   useEffect(() => {
@@ -732,8 +756,8 @@ export const MedicationProvider = ({ children }) => {
                   return;
                 }
                 
-                // Se não foi tomado, marcar como perdido após 5 minutos
-                console.log(`⏳ Agendando marcação automática como perdido para 5 minutos no futuro`);
+                // Se não foi tomado, marcar como perdido após 1 minuto (para testes)
+                console.log(`⏳ Agendando marcação automática como perdido para 1 minuto no futuro`);
                 
                 const timeoutId = setTimeout(async () => {
                   try {
@@ -754,25 +778,70 @@ export const MedicationProvider = ({ children }) => {
                     
                     // Marcar como perdido
                     console.log(`⚠️  Marcando medicamento ${medicationId} como perdido (horário: ${scheduledTime})`);
-                    await logMedicationMissed(medicationId, scheduledTime);
-                    
-                    // Atualizar a lista de medicamentos para refletir a mudança
-                    setMedications(prevMedications => 
-                      prevMedications.map(med => 
-                        med.id === medicationId 
-                          ? { ...med, lastStatus: 'missed', lastUpdated: new Date().toISOString() }
-                          : med
-                      )
-                    );
+                
+                    try {
+                      // Primeiro tenta notificar os contatos de emergência
+                      console.log('🔑 Obtendo token de autenticação...');
+                      const token = await AsyncStorage.getItem('userToken');
+                      
+                      if (!token) {
+                        console.error('❌ Nenhum token de autenticação encontrado');
+                        throw new Error('Usuário não autenticado');
+                      }
+                      
+                      console.log('🔑 Token encontrado, preparando requisição...');
+                      console.log('📤 Enviando notificação para contatos de emergência...', {
+                        medicationId,
+                        scheduledTime,
+                        token: token ? 'Token presente' : 'Token ausente'
+                      });
+                      
+                      const response = await api.post(
+                        '/api/notifications/medication-missed', 
+                        {
+                          medicationName: medicationId,
+                          scheduledTime: scheduledTime,
+                          email: user?.email, // Adiciona o email do usuário
+                          userId: user?.id    // Adiciona o ID do usuário
+                        }
+                      );
+                      
+                      // Se chegou aqui, a notificação foi enviada com sucesso
+                      console.log('✅ Notificação enviada para contatos de emergência', {
+                        status: response.status,
+                        data: response.data
+                      });
+                      
+                      // Agora marca como perdido no histórico
+                      await logMedicationMissed(medicationId, scheduledTime);
+                      
+                      // Atualizar a lista de medicamentos para refletir a mudança
+                      setMedications(prevMedications => 
+                        prevMedications.map(med => 
+                          med.id === medicationId 
+                            ? { ...med, lastStatus: 'missed', lastUpdated: new Date().toISOString() }
+                            : med
+                        )
+                      );
+                    } catch (error) {
+                      console.error('❌ Erro ao notificar contatos de emergência:', error);
+                      // Mesmo com erro, tenta marcar como perdido localmente
+                      await logMedicationMissed(medicationId, scheduledTime);
+                    }
                     
                     console.log(`✅ Medicamento ${medicationId} marcado como perdido com sucesso`);
                   } catch (error) {
                     console.error('❌ Erro ao marcar medicamento como perdido:', error);
                   }
-                }, 5 * 60 * 1000); // 5 minutos
+                }, 1 * 60 * 1000); // 1 minuto (para testes)
                 
                 // Armazenar o timeoutId para possível cancelamento
-                notificationTimeouts[`${medicationId}_${scheduledTime}`] = timeoutId;
+                const timeoutKey = `${medicationId}_${scheduledTime}`;
+                // Limpar timeout anterior se existir
+                if (notificationTimeoutsRef.current[timeoutKey]) {
+                  clearTimeout(notificationTimeoutsRef.current[timeoutKey]);
+                }
+                notificationTimeoutsRef.current[timeoutKey] = timeoutId;
               }
             }
           } catch (error) {
@@ -785,7 +854,8 @@ export const MedicationProvider = ({ children }) => {
         return () => {
           // Limpar todos os timeouts pendentes
           console.log('Limpando timeouts de notificação...');
-          Object.values(notificationTimeouts).forEach(clearTimeout);
+          Object.values(notificationTimeoutsRef.current).forEach(clearTimeout);
+          notificationTimeoutsRef.current = {};
           
           // Limpar o listener de notificações
           if (subscription) {
@@ -968,6 +1038,9 @@ export const MedicationProvider = ({ children }) => {
   };
   
   // Agendar todas as notificações para um medicamento
+  // Rastrear notificações agendadas para evitar duplicatas
+  const scheduledNotificationIds = new Set();
+
   const scheduleNotificationsForMedication = async (medication) => {
     try {
       // Validação inicial dos parâmetros
@@ -1032,6 +1105,9 @@ export const MedicationProvider = ({ children }) => {
             continue;
           }
           
+          // Adicionar ao conjunto de IDs agendados
+          scheduledNotificationIds.add(notificationId);
+          
           console.log(`✅ Notificação principal agendada com sucesso! ID: ${notificationId}`);
           totalScheduled++;
           
@@ -1060,11 +1136,20 @@ export const MedicationProvider = ({ children }) => {
                 reminderText: reminderText
               };
               
+              // Verificar se já existe uma notificação idêntica agendada
+              const reminderKey = `${medication.id}_${reminderDate.getTime()}`;
+              
+              if (scheduledNotificationIds.has(reminderKey)) {
+                console.log(`   ⚠️  Lembrete duplicado ignorado para ${reminderDate.toLocaleString('pt-BR')}`);
+                continue;
+              }
+              
               // Agendar o lembrete
               const reminderId = await scheduleNotification(reminderMedication, reminderDate);
               
               if (reminderId) {
                 console.log(`   ✅ Lembrete ${i} agendado com sucesso!`);
+                scheduledNotificationIds.add(reminderKey);
                 totalScheduled++;
               } else {
                 console.error(`   ❌ Falha ao agendar lembrete ${i}`);
