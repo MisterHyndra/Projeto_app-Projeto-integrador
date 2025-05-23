@@ -3,6 +3,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { format, parseISO, addMinutes } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useAuth } from './AuthContext';
+import axios from 'axios';
+
+// Configuração da instância do axios
+const api = axios.create({
+  baseURL: 'http://localhost:3000', // Servidor backend rodando na porta 3000
+  timeout: 5000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 

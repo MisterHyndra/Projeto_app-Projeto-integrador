@@ -2,12 +2,30 @@ const nodemailer = require('nodemailer');
 require('dotenv').config();
 
 // Configuração do transporte de e-mail
+// Configuração do transporte de e-mail com opções adicionais
 const transporter = nodemailer.createTransport({
-  service: 'gmail', // ou outro serviço de e-mail
+  host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.EMAIL_PORT || '587', 10),
+  secure: process.env.EMAIL_SECURE === 'true', // true para 465, false para outras portas
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD,
+    pass: process.env.EMAIL_PASSWORD
   },
+  tls: {
+    // Apenas para desenvolvimento, em produção use um certificado válido
+    rejectUnauthorized: process.env.EMAIL_REJECT_UNAUTHORIZED !== 'false'
+  },
+  debug: process.env.NODE_ENV === 'development', // Mostra logs de depuração em desenvolvimento
+  logger: process.env.NODE_ENV === 'development' // Mostra logs de depuração em desenvolvimento
+});
+
+// Verificar a conexão com o servidor de e-mail
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('Erro na conexão com o servidor de e-mail:', error);
+  } else {
+    console.log('Servidor de e-mail conectado com sucesso!');
+  }
 });
 
 /**
