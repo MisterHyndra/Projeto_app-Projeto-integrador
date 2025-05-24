@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, Dimensions, Image } from 'react-native';
 import { Video } from 'expo-av';
+import React, { useEffect, useRef, useState } from 'react';
+import { Dimensions, Image, StyleSheet, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -67,10 +67,13 @@ export default function SplashScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
+      <View style={styles.backgroundWhite} />
       <Video
         ref={videoRef}
         style={styles.video}
         resizeMode="cover"
+        shouldPlay
+        isLooping={false}
       />
     </View>
   );
@@ -79,7 +82,7 @@ export default function SplashScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -90,6 +93,12 @@ const styles = StyleSheet.create({
   },
   fallbackImage: {
     width: width * 0.7,
-    height: height * 0.3,
-  }
+    height: height * 0.4,
+    backgroundColor: '#D9D9D9',
+  },
+  backgroundWhite: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#D9D9D9',
+    zIndex: -1,
+  },
 });
