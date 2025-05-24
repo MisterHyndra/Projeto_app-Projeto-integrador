@@ -1,24 +1,37 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useMedication } from '../contexts/MedicationContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import React, { useEffect, useState } from 'react';
+import { FlatList, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useMedication } from '../contexts/MedicationContext';
 
 export default function NotificationsScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
+  const [scheduledNotifications, setScheduledNotifications] = useState([]);
   const { notificationSettings, medications, savedNotifications, upcomingNotifications, checkScheduledNotifications } = useMedication();
   const { isAuthenticated, user } = { isAuthenticated: true, user: { id: 'user1' } }; // Simulando contexto de autenticação
+
+  // Carregar notificações agendadas
+  const loadScheduledNotifications = async () => {
+    try {
+      const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+      console.log('Notificações agendadas encontradas:', scheduled.length);
+      setScheduledNotifications(scheduled);
+    } catch (error) {
+      console.error('Erro ao carregar notificações agendadas:', error);
+    }
+  };
 
   // Atualizar as notificações quando o componente for montado ou quando o foco mudar
   useEffect(() => {
     setNotifications(savedNotifications || []);
     
+    // Carregar notificações agendadas
+    loadScheduledNotifications();
+    
     // Verificar notificações agendadas quando a tela receber foco
     const unsubscribe = navigation.addListener('focus', () => {
       checkScheduledNotifications();
+      loadScheduledNotifications();
     });
     
     // Verificar notificações agendadas imediatamente
@@ -40,8 +53,22 @@ export default function NotificationsScreen({ navigation }) {
   };
 
   // Função para limpar todas as notificações
-  const clearAllNotifications = () => {
-    setNotifications([]);
+  const clearAllNotifications = async () => {
+    try {
+      // Limpar notificações agendadas
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      
+      // Atualizar o estado local
+      setNotifications([]);
+      setScheduledNotifications([]);
+      
+      console.log('Todas as notificações foram canceladas');
+      
+      // Recarregar a lista para garantir que está vazia
+      loadScheduledNotifications();
+    } catch (error) {
+      console.error('Erro ao limpar notificações:', error);
+    }
   };
 
   // Renderiza um item da lista de notificações
@@ -92,20 +119,21 @@ export default function NotificationsScreen({ navigation }) {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Notificações</Text>
-        {notifications.length > 0 && (
+        <View style={styles.headerContent}>
+          <Text style={styles.headerTitle}>Notificações</Text>
           <TouchableOpacity 
             style={styles.clearButton}
             onPress={clearAllNotifications}
+            disabled={notifications.length === 0}
           >
-            <Ionicons name="trash-outline" size={16} color="#718096" />
+            <Ionicons name="trash-outline" size={14} color="#718096" />
             <Text style={styles.clearButtonText}>Limpar Tudo</Text>
           </TouchableOpacity>
-        )}
+        </View>
       </View>
       
       <ScrollView style={styles.settingsContainer}>
-        <View style={styles.card}>
+        <View style={[styles.card, { marginBottom: 20 }]}>
           <Text style={styles.cardTitle}>Configurações de Notificação</Text>
           <View style={styles.divider} />
           
@@ -141,28 +169,69 @@ export default function NotificationsScreen({ navigation }) {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Próximas Notificações</Text>
           <View style={styles.divider} />
-          {upcomingNotifications && upcomingNotifications.length > 0 ? (
-            <FlatList
-              data={upcomingNotifications}
-              renderItem={({ item }) => (
-                <View style={styles.upcomingNotificationItem}>
-                  <View style={styles.upcomingIconContainer}>
-                    <Ionicons name="time-outline" size={18} color="#4A90E2" />
+          {scheduledNotifications && scheduledNotifications.length > 0 ? (
+            scheduledNotifications.map((notification, index) => {
+              // Extrair informações da notificação
+              let triggerDate;
+              
+              // Lidar com diferentes formatos de trigger
+              if (notification.trigger && notification.trigger.date) {
+                triggerDate = new Date(notification.trigger.date);
+              } else if (notification.trigger && notification.trigger.seconds) {
+                // Se for um timestamp em segundos
+                triggerDate = new Date(notification.trigger.seconds * 1000);
+              } else {
+                triggerDate = new Date();
+              }
+              
+              const now = new Date();
+              
+              // Formatar data e hora
+              const timeString = triggerDate.toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'UTC' // Usar UTC para evitar ajustes de fuso horário
+              });
+              
+              // Verificar se é para hoje ou outro dia
+              const isToday = triggerDate.getDate() === now.getDate() && 
+                            triggerDate.getMonth() === now.getMonth() && 
+                            triggerDate.getFullYear() === now.getFullYear();
+              
+              const dateString = isToday ? 'Hoje' : triggerDate.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                timeZone: 'UTC'
+              });
+              
+              // Extrair nome do medicamento
+              const medicationName = notification.content?.data?.medicationName || 'Medicamento';
+              
+              return (
+                <View key={`upcoming-${index}`} style={styles.upcomingItem}>
+                  <View style={styles.upcomingTimeContainer}>
+                    <Text style={styles.upcomingTime}>{timeString}</Text>
+                    <Text style={styles.upcomingDate}>{dateString}</Text>
                   </View>
                   <View style={styles.upcomingContent}>
-                    <Text style={styles.upcomingTitle}>{item.medicationName}</Text>
-                    <Text style={styles.upcomingTime}>{item.time} • {item.date}</Text>
+                    <Text style={styles.upcomingTitle} numberOfLines={1}>
+                      {medicationName}
+                    </Text>
+                    <Text style={styles.upcomingBody} numberOfLines={2}>
+                      {notification.content?.body || 'Lembrete de medicamento'}
+                    </Text>
                   </View>
                 </View>
-              )}
-              keyExtractor={(item) => item.id || item.medicationId + item.time}
-              scrollEnabled={false}
-              nestedScrollEnabled={true}
-            />
+              );
+            })
           ) : (
-            <Text style={styles.infoText}>
-              As notificações serão exibidas aqui quando houver medicamentos agendados.
-            </Text>
+            <View style={styles.emptyUpcomingContainer}>
+              <Ionicons name="time-outline" size={40} color="#CBD5E0" />
+              <Text style={styles.emptyUpcomingText}>
+                Nenhum lembrete futuro agendado
+              </Text>
+            </View>
           )}
         </View>
       </ScrollView>
@@ -184,12 +253,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#F7FAFC',
   },
   header: {
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 20,
-    paddingHorizontal: 16,
-    paddingBottom: 16,
+    padding: 16,
   },
   headerTitle: {
     fontSize: 24,
@@ -199,16 +272,19 @@ const styles = StyleSheet.create({
   clearButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EDF2F7',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    paddingVertical:5,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    backgroundColor: '#F7FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginLeft: 4,
   },
   clearButtonText: {
     marginLeft: 4,
+    color: '#718096',
     fontSize: 14,
     fontWeight: '500',
-    color: '#718096',
   },
   settingsContainer: {
     padding: 16,
@@ -334,33 +410,51 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 300,
   },
-  upcomingNotificationItem: {
+  upcomingItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#EDF2F7',
   },
-  upcomingIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#E6F0FF',
-    justifyContent: 'center',
-    alignItems: 'center',
+  upcomingTimeContainer: {
+    width: 70,
+    alignItems: 'flex-start',
     marginRight: 12,
+  },
+  upcomingTime: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#2D3748',
+  },
+  upcomingDate: {
+    fontSize: 12,
+    color: '#718096',
+    marginTop: 2,
   },
   upcomingContent: {
     flex: 1,
   },
   upcomingTitle: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#2D3748',
     marginBottom: 2,
   },
-  upcomingTime: {
+  upcomingBody: {
     fontSize: 13,
     color: '#718096',
+    lineHeight: 18,
+  },
+  emptyUpcomingContainer: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyUpcomingText: {
+    marginTop: 12,
+    color: '#A0AEC0',
+    textAlign: 'center',
+    fontSize: 14,
   },
 });
