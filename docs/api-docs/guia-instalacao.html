@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guia de Instalação - Med Alert</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { scroll-behavior: smooth; }
+    code {
+      @apply bg-slate-800 text-cyan-300 px-1.5 py-0.5 rounded text-sm;
+    }
+    pre {
+      @apply bg-slate-800/50 p-4 rounded-lg overflow-x-auto my-4 border border-slate-700;
+    }
+    pre code {
+      @apply bg-transparent p-0;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans">
+  <!-- Cabeçalho -->
+  <header class="bg-slate-800/50 border-b border-slate-700 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 py-4">
+      <div class="flex items-center justify-between">
+        <a href="../documentacao-nova.html" class="flex items-center gap-2 text-cyan-400 hover:text-cyan-300">
+          <svg id="arrow-left" class="w-5 h-5" fill="none"></svg>
+          Voltar para a documentação
+        </a>
+        <h1 class="text-2xl font-bold text-cyan-400">Guia de Instalação e Configuração</h1>
+        <div></div> <!-- Espaçador -->
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-6 py-8">
+    <div class="bg-slate-800/50 rounded-xl p-8 border border-slate-700">
+      <div class="prose prose-invert max-w-none">
+        <h1 class="text-3xl font-bold text-cyan-400 mb-2">Guia de Instalação e Configuração</h1>
+        <p class="text-slate-300 mt-4">
+          Este guia irá ajudá-lo a configurar o ambiente de desenvolvimento do Med Alert em sua máquina local.
+        </p>
+
+        <!-- Pré-requisitos -->
+        <section id="pre-requisitos" class="mt-10">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+            <svg id="check-circle" class="w-6 h-6"></svg>
+            Pré-requisitos
+          </h2>
+          <p class="text-slate-300">Antes de começar, certifique-se de ter instalado em sua máquina:</p>
+          <ul class="list-disc pl-6 mt-2 space-y-2 text-slate-300">
+            <li><a href="https://nodejs.org/" target="_blank" class="text-cyan-400 hover:underline">Node.js</a> (versão 16.x ou superior)</li>
+            <li><a href="https://www.npmjs.com/" target="_blank" class="text-cyan-400 hover:underline">npm</a> (geralmente vem com o Node.js) ou <a href="https://yarnpkg.com/" target="_blank" class="text-cyan-400 hover:underline">Yarn</a></li>
+            <li><a href="https://git-scm.com/" target="_blank" class="text-cyan-400 hover:underline">Git</a> para controle de versão</li>
+            <li><a href="https://www.postgresql.org/" target="_blank" class="text-cyan-400 hover:underline">PostgreSQL</a> (versão 12 ou superior)</li>
+          </ul>
+        </section>
+
+        <!-- Passo 1: Clonar o repositório -->
+        <section id="passo-1" class="mt-10">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+            <span class="bg-cyan-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">1</span>
+            Clonar o repositório
+          </h2>
+          <p class="text-slate-300">Comece clonando o repositório do projeto:</p>
+          <pre><code class="language-bash"># Clonar o repositório
+git clone https://github.com/seu-usuario/med-alert.git
+
+# Navegar até o diretório do projeto
+cd med-alert</code></pre>
+        </section>
+
+        <!-- Passo 2: Instalar dependências -->
+        <section id="passo-2" class="mt-10">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+            <span class="bg-cyan-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">2</span>
+            Instalar dependências
+          </h2>
+          <p class="text-slate-300">Instale as dependências do projeto:</p>
+          <pre><code class="language-bash"># Instalar dependências do backend
+cd backend
+npm install
+
+# Instalar dependências do frontend
+cd ../frontend
+npm install</code></pre>
+        </section>
+
+        <!-- Passo 3: Configurar variáveis de ambiente -->
+        <section id="passo-3" class="mt-10">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+            <span class="bg-cyan-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">3</span>
+            Configurar variáveis de ambiente
+          </h2>
+          <p class="text-slate-300">Crie e configure os arquivos de ambiente necessários:</p>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">Backend (.env)</h3>
+          <p class="text-slate-300">Crie um arquivo <code>.env</code> na pasta <code>backend</code> com as seguintes variáveis:</p>
+          <pre><code class="language-env"># Configurações do servidor
+PORT=3000
+NODE_ENV=development
+
+# Configurações do banco de dados
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=medalert
+DB_USER=seu_usuario
+DB_PASSWORD=sua_senha
+
+# Chave secreta para JWT
+JWT_SECRET=sua_chave_secreta_aqui
+JWT_EXPIRES_IN=7d
+
+# Configurações de e-mail (opcional, necessário para notificações por e-mail)
+EMAIL_HOST=smtp.exemplo.com
+EMAIL_PORT=587
+EMAIL_USER=seu_email@exemplo.com
+EMAIL_PASSWORD=sua_senha
+EMAIL_FROM="Med Alert &lt;noreply@medalert.com&gt;"
+
+# Configurações de notificação
+NOTIFICATION_REMINDER_INTERVAL=15 # minutos entre lembretes
+MAX_REMINDERS=3 # número máximo de lembretes</code></pre>
+
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">Frontend (.env)</h3>
+          <p class="text-slate-300">Crie um arquivo <code>.env</code> na pasta <code>frontend</code> com as seguintes variáveis:</p>
+          <pre><code class="language-env"># URL da API
+REACT_APP_API_URL=http://localhost:3000
+
+# Configurações do Firebase (para notificações push)
+REACT_APP_FIREBASE_API_KEY=sua_chave_aqui
+REACT_APP_FIREBASE_AUTH_DOMAIN=seu-projeto.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=seu-projeto
+REACT_APP_FIREBASE_STORAGE_BUCKET=seu-projeto.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=123456789012
+REACT_APP_FIREBASE_APP_ID=1:123456789012:web:abcdef123456
+REACT_APP_FIREBASE_MEASUREMENT_ID=G-ABCDEF1234</code></pre>
+        </section>
+
+        <!-- Passo 4: Configurar o banco de dados -->
+        <section id="passo-4" class="mt-10">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+            <span class="bg-cyan-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">4</span>
+            Configurar o banco de dados
+          </h2>
+          <p class="text-slate-300">Siga estes passos para configurar o banco de dados PostgreSQL:</p>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">Criar o banco de dados</h3>
+          <p class="text-slate-300">Conecte-se ao PostgreSQL e execute:</p>
+          <pre><code class="language-sql">CREATE DATABASE medalert;
+CREATE USER seu_usuario WITH PASSWORD 'sua_senha';
+GRANT ALL PRIVILEGES ON DATABASE medalert TO seu_usuario;
+\c medalert
+GRANT ALL ON SCHEMA public TO seu_usuario;</code></pre>
+
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">Executar migrações</h3>
+          <p class="text-slate-300">Execute as migrações para criar as tabelas:</p>
+          <pre><code class="language-bash">cd backend
+npx sequelize-cli db:migrate</code></pre>
+
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">Popular o banco de dados (opcional)</h3>
+          <p class="text-slate-300">Se desejar, você pode popular o banco com dados de exemplo:</p>
+          <pre><code class="language-bash">npx sequelize-cli db:seed:all</code></pre>
+        </section>
+
+        <!-- Passo 5: Iniciar os servidores -->
+        <section id="passo-5" class="mt-10">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+            <span class="bg-cyan-500 text-white rounded-full w-8 h-8 flex items-center justify-center text-sm">5</span>
+            Iniciar os servidores
+          </h2>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">Backend</h3>
+          <p class="text-slate-300">Em um terminal, inicie o servidor backend:</p>
+          <pre><code class="language-bash">cd backend
+npm run dev</code></pre>
+
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">Frontend</h3>
+          <p class="text-slate-300">Em outro terminal, inicie o servidor de desenvolvimento do frontend:</p>
+          <pre><code class="language-bash">cd frontend
+npm start</code></pre>
+          
+          <p class="mt-4 text-slate-300">O aplicativo estará disponível em <a href="http://localhost:3001" class="text-cyan-400 hover:underline">http://localhost:3001</a> (a porta pode variar).</p>
+        </section>
+
+        <!-- Solução de problemas -->
+        <section id="solucao-problemas" class="mt-10">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4 flex items-center gap-2">
+            <svg id="alert-triangle" class="w-6 h-6"></svg>
+            Solução de problemas
+          </h2>
+          
+          <div class="bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded my-4">
+            <h3 class="font-semibold text-amber-300">Erro ao conectar ao banco de dados</h3>
+            <p class="text-amber-100 text-sm mt-1">Verifique se o PostgreSQL está em execução e se as credenciais no arquivo <code>.env</code> estão corretas.</p>
+          </div>
+          
+          <div class="bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded my-4">
+            <h3 class="font-semibold text-amber-300">Erro de permissão no PostgreSQL</h3>
+            <p class="text-amber-100 text-sm mt-1">Certifique-se de que o usuário do banco de dados tem as permissões necessárias. Consulte a documentação do PostgreSQL para configurar as permissões corretamente.</p>
+          </div>
+          
+          <div class="bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded my-4">
+            <h3 class="font-semibold text-amber-300">Erro de porta em uso</h3>
+            <p class="text-amber-100 text-sm mt-1">Se a porta 3000 já estiver em uso, você pode alterar a porta no arquivo <code>.env</code> do backend.</p>
+          </div>
+        </section>
+
+        <!-- Próximos passos -->
+        <section id="proximos-passos" class="mt-12 pt-6 border-t border-slate-700">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Próximos passos</h2>
+          <ul class="list-disc pl-6 space-y-2 text-slate-300">
+            <li>Explore a <a href="api-reference.html" class="text-cyan-400 hover:underline">documentação da API</a> para entender como interagir com o backend.</li>
+            <li>Consulte o <a href="../documentacao-nova.html" class="text-cyan-400 hover:underline">guia do desenvolvedor</a> para obter informações sobre a arquitetura do projeto.</li>
+            <li>Se encontrar algum problema, consulte nossa <a href="#solucao-problemas" class="text-cyan-400 hover:underline">seção de solução de problemas</a> ou abra uma issue no GitHub.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="bg-slate-900 py-6 mt-12">
+    <div class="container mx-auto px-6 text-center">
+      <p class="text-slate-500 text-sm">
+        &copy; 2025 Med Alert. Todos os direitos reservados.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Inicializar ícones do Lucide
+    lucide.createIcons();
+  </script>
+</body>
+</html>

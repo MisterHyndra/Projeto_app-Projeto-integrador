@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guia de Contribuição - Med Alert</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { scroll-behavior: smooth; }
+    code {
+      @apply bg-slate-800 text-cyan-300 px-1.5 py-0.5 rounded text-sm;
+    }
+    pre {
+      @apply bg-slate-800/50 p-4 rounded-lg overflow-x-auto my-4 border border-slate-700;
+    }
+    pre code {
+      @apply bg-transparent p-0;
+    }
+    .badge {
+      @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans">
+  <!-- Cabeçalho -->
+  <header class="bg-slate-800/50 border-b border-slate-700 sticky top-0 z-50">
+    <div class="max-w-6xl mx-auto px-6 py-4">
+      <div class="flex items-center justify-between">
+        <a href="../documentacao-nova.html" class="flex items-center gap-2 text-cyan-400 hover:text-cyan-300">
+          <svg id="arrow-left" class="w-5 h-5" fill="none"></svg>
+          Voltar para a documentação
+        </a>
+        <h1 class="text-2xl font-bold text-cyan-400">Guia de Contribuição</h1>
+        <div></div> <!-- Espaçador -->
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-4xl mx-auto px-6 py-8">
+    <div class="bg-slate-800/50 rounded-xl p-8 border border-slate-700">
+      <div class="prose prose-invert max-w-none">
+        <h1 class="text-3xl font-bold text-cyan-400 mb-2">Guia de Contribuição</h1>
+        <p class="text-slate-300 mt-4">
+          Obrigado pelo seu interesse em contribuir para o Med Alert! Este guia irá ajudá-lo a configurar o ambiente de desenvolvimento e enviar suas contribuições.
+        </p>
+
+        <!-- Tabela de Conteúdos -->
+        <nav class="mt-8 bg-slate-800/30 p-4 rounded-lg">
+          <h2 class="text-xl font-semibold text-cyan-400 mb-3">Sumário</h2>
+          <ul class="list-disc pl-5 space-y-1">
+            <li><a href="#primeiros-passos" class="text-cyan-400 hover:underline">Primeiros Passos</a></li>
+            <li><a href="#fluxo-de-trabalho" class="text-cyan-400 hover:underline">Fluxo de Trabalho</a></li>
+            <li><a href="#padroes-de-codigo" class="text-cyan-400 hover:underline">Padrões de Código</a></li>
+            <li><a href="#enviando-mudancas" class="text-cyan-400 hover:underline">Enviando Mudanças</a></li>
+          </ul>
+        </nav>
+
+        <!-- Primeiros Passos -->
+        <section id="primeiros-passos" class="mt-12">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Primeiros Passos</h2>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">1. Fork do Projeto</h3>
+          <p class="text-slate-300">
+            Comece fazendo um fork do repositório principal para a sua conta do GitHub.
+          </p>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">2. Clone o Repositório</h3>
+          <p class="text-slate-300">Clone o seu fork para sua máquina local:</p>
+          <pre><code class="language-bash"># Clone seu fork
+git clone https://github.com/seu-usuario/med-alert.git
+
+# Navegue até o diretório do projeto
+cd med-alert
+
+# Adicione o repositório original como remoto
+git remote add upstream https://github.com/original/med-alert.git</code></pre>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">3. Configure o Ambiente</h3>
+          <p class="text-slate-300">
+            Siga as instruções no <a href="guia-instalacao.html" class="text-cyan-400 hover:underline">Guia de Instalação</a> para configurar o ambiente de desenvolvimento.
+          </p>
+        </section>
+
+        <!-- Fluxo de Trabalho -->
+        <section id="fluxo-de-trabalho" class="mt-12">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Fluxo de Trabalho</h2>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">1. Mantenha seu Fork Atualizado</h3>
+          <pre><code class="language-bash"># Busque as mudanças do repositório original
+git fetch upstream
+
+# Atualize sua branch main
+git checkout main
+git merge upstream/main</code></pre>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">2. Crie uma Branch para sua Feature</h3>
+          <pre><code class="language-bash"># Crie e mude para uma nova branch
+git checkout -b feature/nome-da-feature
+
+# Para correções de bug
+git checkout -b fix/descricao-do-bug</code></pre>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">3. Faça Commits Atômicos</h3>
+          <p class="text-slate-300">Faça commits pequenos e frequentes com mensagens claras:</p>
+          <pre><code class="language-bash">git add .
+git commit -m "feat: adiciona funcionalidade X"</code></pre>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">4. Envie suas Alterações</h3>
+          <pre><code class="language-bash">git push -u origin sua-branch</code></pre>
+        </section>
+
+        <!-- Padrões de Código -->
+        <section id="padroes-de-codigo" class="mt-12">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Padrões de Código</h2>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">JavaScript/TypeScript</h3>
+          <ul class="list-disc pl-6 mt-2 space-y-1 text-slate-300">
+            <li>Siga o <a href="https://standardjs.com/" target="_blank" class="text-cyan-400 hover:underline">JavaScript Standard Style</a></li>
+            <li>Use <code>const</code> por padrão, <code>let</code> apenas quando necessário</li>
+            <li>Prefira funções de seta</li>
+          </ul>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">React/React Native</h3>
+          <ul class="list-disc pl-6 mt-2 space-y-1 text-slate-300">
+            <li>Use componentes funcionais com Hooks</li>
+            <li>Nomeie componentes com PascalCase</li>
+            <li>Use prop-types ou TypeScript</li>
+          </ul>
+        </section>
+
+        <!-- Enviando Mudanças -->
+        <section id="enviando-mudancas" class="mt-12">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Enviando Mudanças</h2>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">1. Crie um Pull Request</h3>
+          <ol class="list-decimal pl-6 mt-2 space-y-2 text-slate-300">
+            <li>Vá para a página do seu fork no GitHub</li>
+            <li>Clique em "Compare & pull request"</li>
+            <li>Preencha o formulário do PR</li>
+            <li>Marque a issue relacionada (ex: "Fixes #123")</li>
+          </ol>
+          
+          <h3 class="text-xl font-semibold text-white mt-6 mb-2">2. Revisão de Código</h3>
+          <p class="text-slate-300">
+            Após abrir o PR, a equipe revisará suas alterações. Esteja preparado para fazer ajustes se necessário.
+          </p>
+        </section>
+
+        <!-- Rodapé -->
+        <div class="mt-12 pt-6 border-t border-slate-700">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Obrigado!</h2>
+          <p class="text-slate-300">
+            Agradecemos sua contribuição para o Med Alert. Juntos, podemos ajudar as pessoas a gerenciarem melhor seus medicamentos.
+          </p>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="bg-slate-900 py-6 mt-12">
+    <div class="container mx-auto px-6 text-center">
+      <p class="text-slate-500 text-sm">
+        &copy; 2025 Med Alert. Todos os direitos reservados.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Inicializar ícones do Lucide
+    lucide.createIcons();
+  </script>
+</body>
+</html>

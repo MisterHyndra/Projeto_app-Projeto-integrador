@@ -3,7 +3,10 @@ const router = express.Router();
 const notificationController = require('../controllers/notificationController');
 const authMiddleware = require('../middlewares/auth');
 
-// Aplicar middleware de autenticação em todas as rotas
+// Rota de teste de SMS (sem autenticação para facilitar os testes)
+router.get('/test-sms', notificationController.testSMS);
+
+// Aplicar middleware de autenticação nas demais rotas
 router.use(authMiddleware);
 
 /**

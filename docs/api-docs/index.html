@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Documentação da API - Med Alert</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body { scroll-behavior: smooth; }
+    .endpoint {
+      background: #1e293b;
+      border-left: 4px solid #06b6d4;
+    }
+    .method-get { color: #10b981; }
+    .method-post { color: #3b82f6; }
+    .method-put { color: #f59e0b; }
+    .method-delete { color: #ef4444; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans">
+  <!-- Cabeçalho -->
+  <header class="bg-slate-800 py-8">
+    <div class="container mx-auto px-6">
+      <div class="flex items-center gap-3">
+        <a href="../documentacao-nova.html" class="text-cyan-400 hover:text-cyan-300">
+          <svg id="arrow-left" class="w-6 h-6" fill="none"></svg>
+        </a>
+        <h1 class="text-3xl font-bold text-cyan-400">Documentação da API</h1>
+      </div>
+      <p class="mt-2 text-slate-300">Referência completa dos endpoints da API RESTful do Med Alert</p>
+    </div>
+  </header>
+
+  <main class="container mx-auto px-6 py-8">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <!-- Sidebar -->
+      <div class="lg:col-span-1">
+        <div class="sticky top-4">
+          <div class="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+            <h2 class="text-lg font-semibold text-white mb-4">Sumário</h2>
+            <ul class="space-y-2">
+              <li><a href="#introducao" class="text-cyan-400 hover:text-cyan-300">Introdução</a></li>
+              <li><a href="#autenticacao" class="text-cyan-400 hover:text-cyan-300">Autenticação</a></li>
+              <li class="mt-4 font-medium text-slate-300">Endpoints</li>
+              <li><a href="#usuarios" class="text-cyan-400 hover:text-cyan-300">Usuários</a></li>
+              <li><a href="#medicamentos" class="text-cyan-400 hover:text-cyan-300">Medicamentos</a></li>
+              <li><a href="#notificacoes" class="text-cyan-400 hover:text-cyan-300">Notificações</a></li>
+              <li><a href="#erros" class="text-cyan-400 hover:text-cyan-300">Códigos de Erro</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conteúdo -->
+      <div class="lg:col-span-3 space-y-12">
+        <!-- Introdução -->
+        <section id="introducao" class="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Introdução</h2>
+          <p class="text-slate-300 mb-4">
+            Bem-vindo à documentação da API do Med Alert. Esta API RESTful permite que você integre o sistema de gerenciamento de medicamentos em seus próprios aplicativos e serviços.
+          </p>
+          <div class="bg-slate-900/50 p-4 rounded-lg">
+            <p class="text-sm text-slate-400">URL Base da API:</p>
+            <code class="text-cyan-400">https://api.medalert.com/v1</code>
+          </div>
+          <h3 class="text-xl font-semibold text-white mt-6 mb-3">Formatos de Resposta</h3>
+          <p class="text-slate-300 mb-4">
+            Todas as respostas da API são retornadas no formato JSON, incluindo mensagens de erro.
+          </p>
+        </section>
+
+        <!-- Autenticação -->
+        <section id="autenticacao" class="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Autenticação</h2>
+          <p class="text-slate-300 mb-4">
+            A maioria dos endpoints da API requer autenticação. Utilize o token JWT retornado no login para se autenticar nas requisições subsequentes.
+          </p>
+          <div class="endpoint p-4 rounded-lg mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="method-post font-mono font-bold">POST</span>
+              <span class="font-mono text-sm">/api/auth/login</span>
+            </div>
+            <p class="text-slate-300 text-sm mb-3">Autentica um usuário e retorna um token JWT.</p>
+            <h4 class="text-white font-medium mb-2">Exemplo de Requisição:</h4>
+            <pre class="bg-slate-900 p-3 rounded text-sm overflow-x-auto">
+<code class="text-slate-300">{
+  "email": "usuario@exemplo.com",
+  "password": "senha123"
+}</code></pre>
+            <h4 class="text-white font-medium mt-4 mb-2">Exemplo de Resposta (200 OK):</h4>
+            <pre class="bg-slate-900 p-3 rounded text-sm overflow-x-auto">
+<code class="text-slate-300">{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 1,
+    "name": "Nome do Usuário",
+    "email": "usuario@exemplo.com"
+  }
+}</code></pre>
+          </div>
+          <div class="bg-amber-900/20 border-l-4 border-amber-500 p-4 rounded">
+            <div class="flex">
+              <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                </svg>
+              </div>
+              <div class="ml-3">
+                <p class="text-sm text-amber-300">
+                  Inclua o token JWT no cabeçalho <code class="bg-amber-900/50 px-1 py-0.5 rounded">Authorization: Bearer &lt;token&gt;</code> em todas as requisições autenticadas.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Usuários -->
+        <section id="usuarios" class="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Usuários</h2>
+          
+          <!-- Listar Usuários -->
+          <div class="endpoint p-4 rounded-lg mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="method-get font-mono font-bold">GET</span>
+              <span class="font-mono text-sm">/api/users</span>
+            </div>
+            <p class="text-slate-300 text-sm mb-3">Lista todos os usuários (apenas administradores).</p>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-3">
+              <span class="px-2 py-0.5 bg-slate-700 rounded">Autenticação: Obrigatória</span>
+              <span class="px-2 py-0.5 bg-slate-700 rounded">Admin: Sim</span>
+            </div>
+          </div>
+
+          <!-- Obter Perfil -->
+          <div class="endpoint p-4 rounded-lg mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="method-get font-mono font-bold">GET</span>
+              <span class="font-mono text-sm">/api/users/profile</span>
+            </div>
+            <p class="text-slate-300 text-sm mb-3">Obtém o perfil do usuário autenticado.</p>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-3">
+              <span class="px-2 py-0.5 bg-slate-700 rounded">Autenticação: Obrigatória</span>
+            </div>
+            <h4 class="text-white font-medium mt-4 mb-2">Exemplo de Resposta (200 OK):</h4>
+            <pre class="bg-slate-900 p-3 rounded text-sm overflow-x-auto">
+<code class="text-slate-300">{
+  "id": 1,
+  "name": "Nome do Usuário",
+  "email": "usuario@exemplo.com",
+  "createdAt": "2025-01-01T00:00:00.000Z",
+  "updatedAt": "2025-01-01T00:00:00.000Z"
+}</code></pre>
+          </div>
+        </section>
+
+        <!-- Medicamentos -->
+        <section id="medicamentos" class="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Medicamentos</h2>
+          
+          <!-- Listar Medicamentos -->
+          <div class="endpoint p-4 rounded-lg mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="method-get font-mono font-bold">GET</span>
+              <span class="font-mono text-sm">/api/medications</span>
+            </div>
+            <p class="text-slate-300 text-sm mb-3">Lista todos os medicamentos do usuário autenticado.</p>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-3">
+              <span class="px-2 py-0.5 bg-slate-700 rounded">Autenticação: Obrigatória</span>
+            </div>
+            <h4 class="text-white font-medium mt-4 mb-2">Exemplo de Resposta (200 OK):</h4>
+            <pre class="bg-slate-900 p-3 rounded text-sm overflow-x-auto">
+<code class="text-slate-300">[
+  {
+    "id": 1,
+    "name": "Paracetamol",
+    "dosage": "500mg",
+    "frequency": "8h",
+    "time_of_day": "08:00, 16:00, 00:00",
+    "status": "scheduled",
+    "createdAt": "2025-01-01T00:00:00.000Z",
+    "updatedAt": "2025-01-01T00:00:00.000Z"
+  }
+]</code></pre>
+          </div>
+
+          <!-- Adicionar Medicamento -->
+          <div class="endpoint p-4 rounded-lg mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="method-post font-mono font-bold">POST</span>
+              <span class="font-mono text-sm">/api/medications</span>
+            </div>
+            <p class="text-slate-300 text-sm mb-3">Adiciona um novo medicamento.</p>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-3">
+              <span class="px-2 py-0.5 bg-slate-700 rounded">Autenticação: Obrigatória</span>
+            </div>
+            <h4 class="text-white font-medium mb-2">Corpo da Requisição:</h4>
+            <pre class="bg-slate-900 p-3 rounded text-sm overflow-x-auto">
+<code class="text-slate-300">{
+  "name": "Paracetamol",
+  "dosage": "500mg",
+  "frequency": "8h",
+  "time_of_day": "08:00, 16:00, 00:00",
+  "status": "scheduled"
+}</code></pre>
+          </div>
+        </section>
+
+        <!-- Notificações -->
+        <section id="notificacoes" class="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Notificações</h2>
+          
+          <!-- Listar Notificações -->
+          <div class="endpoint p-4 rounded-lg mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="method-get font-mono font-bold">GET</span>
+              <span class="font-mono text-sm">/api/notifications</span>
+            </div>
+            <p class="text-slate-300 text-sm mb-3">Lista todas as notificações do usuário.</p>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-3">
+              <span class="px-2 py-0.5 bg-slate-700 rounded">Autenticação: Obrigatória</span>
+            </div>
+          </div>
+
+          <!-- Marcar como Lida -->
+          <div class="endpoint p-4 rounded-lg mb-6">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="method-put font-mono font-bold">PUT</span>
+              <span class="font-mono text-sm">/api/notifications/:id/read</span>
+            </div>
+            <p class="text-slate-300 text-sm mb-3">Marca uma notificação como lida.</p>
+            <div class="flex items-center gap-2 text-xs text-slate-400 mb-3">
+              <span class="px-2 py-0.5 bg-slate-700 rounded">Autenticação: Obrigatória</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Códigos de Erro -->
+        <section id="erros" class="bg-slate-800/50 rounded-xl p-6 border border-slate-700">
+          <h2 class="text-2xl font-bold text-cyan-400 mb-4">Códigos de Erro</h2>
+          <div class="overflow-x-auto">
+            <table class="min-w-full border border-slate-700">
+              <thead>
+                <tr class="bg-slate-800">
+                  <th class="px-4 py-2 text-left text-sm font-medium text-slate-300 border-b border-slate-700">Código</th>
+                  <th class="px-4 py-2 text-left text-sm font-medium text-slate-300 border-b border-slate-700">Significado</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-700">
+                <tr>
+                  <td class="px-4 py-3 text-sm text-red-400">400</td>
+                  <td class="px-4 py-3 text-sm text-slate-300">Requisição inválida</td>
+                </tr>
+                <tr>
+                  <td class="px-4 py-3 text-sm text-red-400">401</td>
+                  <td class="px-4 py-3 text-sm text-slate-300">Não autorizado</td>
+                </tr>
+                <tr>
+                  <td class="px-4 py-3 text-sm text-red-400">403</td>
+                  <td class="px-4 py-3 text-sm text-slate-300">Acesso negado</td>
+                </tr>
+                <tr>
+                  <td class="px-4 py-3 text-sm text-red-400">404</td>
+                  <td class="px-4 py-3 text-sm text-slate-300">Recurso não encontrado</td>
+                </tr>
+                <tr>
+                  <td class="px-4 py-3 text-sm text-red-400">500</td>
+                  <td class="px-4 py-3 text-sm text-slate-300">Erro interno do servidor</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="bg-slate-900 py-6 mt-12">
+    <div class="container mx-auto px-6 text-center">
+      <p class="text-slate-500 text-sm">
+        &copy; 2025 Med Alert. Todos os direitos reservados.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Inicializar ícones do Lucide
+    lucide.createIcons();
+  </script>
+</body>
+</html>
