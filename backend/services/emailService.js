@@ -43,6 +43,15 @@ const sendMissedMedicationAlert = async (toEmail, contactName, userName, medicat
       console.error('Nenhum e-mail de destinatário fornecido');
       return false;
     }
+    
+    // Validar nome do medicamento
+    if (typeof medicationName !== 'string' || /^\d+$/.test(medicationName)) {
+      console.error('Erro: Nome do medicamento inválido no e-mail:', medicationName);
+      return false;
+    }
+    
+    // Garantir que o nome do medicamento seja uma string válida
+    const safeMedicationName = medicationName.trim() || 'um medicamento';
 
     const mailOptions = {
       from: `"Sistema de Lembretes de Medicamentos" <${process.env.EMAIL_USER}>`,

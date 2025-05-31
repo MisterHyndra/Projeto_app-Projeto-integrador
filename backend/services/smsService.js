@@ -22,6 +22,18 @@ const sendMissedMedicationSMS = async (toPhoneNumber, contactName, userName, med
       console.error('Nenhum número de telefone de destinatário fornecido');
       return { success: false, message: 'Número de telefone do destinatário não fornecido' };
     }
+    
+    // Validar nome do medicamento
+    if (typeof medicationName !== 'string' || /^\d+$/.test(medicationName)) {
+      console.error('Erro: Nome do medicamento inválido no SMS:', medicationName);
+      return { 
+        success: false, 
+        message: 'Nome do medicamento inválido' 
+      };
+    }
+    
+    // Garantir que o nome do medicamento seja uma string válida
+    const safeMedicationName = medicationName.trim() || 'um medicamento';
 
     // Mensagem super curta para teste
     const shortName = userName.split(' ')[0]; // Pega apenas o primeiro nome

@@ -186,11 +186,10 @@ export default function NotificationsScreen({ navigation }) {
               
               const now = new Date();
               
-              // Formatar data e hora
+              // Formatar data e hora - Removido timeZone para usar o fuso horário local
               const timeString = triggerDate.toLocaleTimeString('pt-BR', {
                 hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'UTC' // Usar UTC para evitar ajustes de fuso horário
+                minute: '2-digit'
               });
               
               // Verificar se é para hoje ou outro dia
@@ -201,8 +200,7 @@ export default function NotificationsScreen({ navigation }) {
               const dateString = isToday ? 'Hoje' : triggerDate.toLocaleDateString('pt-BR', {
                 day: '2-digit',
                 month: '2-digit',
-                year: 'numeric',
-                timeZone: 'UTC'
+                year: 'numeric'
               });
               
               // Extrair nome do medicamento

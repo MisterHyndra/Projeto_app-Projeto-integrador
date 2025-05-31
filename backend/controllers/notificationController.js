@@ -3,6 +3,20 @@ const User = require('../models/user');
 const { sendMissedMedicationAlert } = require('../services/emailService');
 const { sendMissedMedicationSMS } = require('../services/smsService');
 
+// Cache para evitar notificações duplicadas
+let notificationCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
+
+// Função auxiliar para limpar o cache antigo
+const cleanupOldCache = () => {
+  const now = Date.now();
+  for (const [key, timestamp] of notificationCache.entries()) {
+    if (now - timestamp > CACHE_TTL) {
+      notificationCache.delete(key);
+    }
+  }
+};
+
 /**
  * Notifica os contatos de emergência sobre um medicamento não tomado
  * @param {number} userId - ID do usuário que esqueceu o medicamento
@@ -12,6 +26,39 @@ const { sendMissedMedicationSMS } = require('../services/smsService');
  */
 const notifyEmergencyContacts = async (userId, medicationName, scheduledTime) => {
   try {
+    // 0. Verificar e limpar cache antigo
+    cleanupOldCache();
+    
+    // Verificar se o medicationName é válido (não é um ID numérico)
+    if (typeof medicationName !== 'string' || /^\d+$/.test(medicationName)) {
+      console.error('Erro: Nome do medicamento inválido, parece ser um ID:', medicationName);
+      return { 
+        success: false, 
+        message: 'Nome do medicamento inválido',
+        isDuplicate: false
+      };
+    }
+    
+    // Verificar se já existe notificação recente para este medicamento/horário
+    const cacheKey = `${userId}_${medicationName}_${scheduledTime}`;
+    if (notificationCache.has(cacheKey)) {
+      console.log(`Notificação duplicada ignorada para ${medicationName} às ${scheduledTime}`);
+      return { 
+        success: true, 
+        message: 'Notificação duplicada ignorada',
+        isDuplicate: true
+      };
+    }
+    
+    // Adicionar ao cache
+    notificationCache.set(cacheKey, Date.now());
+    
+    // Limitar o tamanho do cache
+    if (notificationCache.size > 100) {
+      const firstKey = notificationCache.keys().next().value;
+      notificationCache.delete(firstKey);
+    }
+    
     // 1. Obter os contatos de emergência do usuário
     const contacts = await EmergencyContact.findAll({
       where: { userId },
@@ -44,6 +91,13 @@ const notifyEmergencyContacts = async (userId, medicationName, scheduledTime) =>
         smsSent: false,
         errors: []
       };
+      
+      // Garantir que o nome do medicamento é uma string válida
+      const safeMedicationName = (typeof medicationName === 'string' && medicationName.trim() !== '') 
+        ? medicationName 
+        : 'um medicamento';
+      
+      console.log(`Notificando ${contact.nome} sobre ${safeMedicationName} às ${scheduledTime}`);
 
       try {
         // Enviar e-mail se o contato tiver e-mail

@@ -1,12 +1,8 @@
-import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { format, parseISO, addMinutes } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 
 // Importar configurações e serviços
-import { API_CONFIG } from '../config';
 import api, { setAuthToken } from '../services/api';
 import { useAuth } from './AuthContext';
 
@@ -420,7 +416,8 @@ export const MedicationProvider = ({ children }) => {
         logEntry = {
           id: Date.now().toString(),
           medicationId,
-          medicationName: `Medicamento (ID: ${medicationId})`,
+          // Usar o nome do medicamento se disponível, caso contrário, usar o ID
+          medicationName: medication ? medication.name : `Medicamento (ID: ${medicationId})`,
           scheduledTime: scheduledTime || currentDate.toISOString(),
           missedAt: currentDate.toISOString(),
           status: 'missed',
@@ -435,15 +432,8 @@ export const MedicationProvider = ({ children }) => {
           try {
             await AsyncStorage.setItem(`history_${user.id}`, JSON.stringify(updatedHistory));
             
-            // Tenta notificar contatos de emergência mesmo sem todas as informações
-            try {
-              await api.post('/api/notifications/medication-missed', {
-                medicationName: `Medicamento (ID: ${medicationId})`,
-                scheduledTime: scheduledTime || currentDate.toISOString()
-              });
-            } catch (error) {
-              console.error('Erro ao notificar contatos de emergência:', error);
-            }
+            // Não notificamos contatos de emergência se não encontrarmos o medicamento
+            // pois não temos informações suficientes para uma notificação útil
           } catch (storageError) {
             console.error('Erro ao salvar histórico no AsyncStorage:', storageError);
           }
@@ -796,13 +786,25 @@ export const MedicationProvider = ({ children }) => {
                         token: token ? 'Token presente' : 'Token ausente'
                       });
                       
+                      // Encontrar o medicamento para obter o nome correto
+                      const medication = medications.find(m => m.id === medicationId);
+                      if (!medication) {
+                        throw new Error('Medicamento não encontrado');
+                      }
+                      
+                      console.log('📝 Enviando notificação para:', {
+                        medicationName: medication.name,
+                        scheduledTime,
+                        userId: user?.id
+                      });
+                      
                       const response = await api.post(
                         '/api/notifications/medication-missed', 
                         {
-                          medicationName: medicationId,
+                          medicationName: medication.name, // Enviar o nome, não o ID
                           scheduledTime: scheduledTime,
-                          email: user?.email, // Adiciona o email do usuário
-                          userId: user?.id    // Adiciona o ID do usuário
+                          email: user?.email,
+                          userId: user?.id
                         }
                       );
                       
